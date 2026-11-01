@@ -232,6 +232,28 @@
         </div>
       </div>
 
+      <!-- Wireshark & Sniffing Permissions Banner (Garuda / Arch / Debian) -->
+      <div id="wireshark-audit-banner" class="hidden bg-gradient-to-r from-blue-900/30 to-[#151921] border border-blue-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center text-base shrink-0">
+            <i class="fa-solid fa-network-wired"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h4 class="text-xs font-bold text-white">Configuración de Wireshark & Sniffing</h4>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/30">Acción Requerida</span>
+            </div>
+            <p id="wireshark-audit-desc" class="text-xs text-gray-300 mt-0.5">
+              Se requiere configurar permisos de dumpcap y grupo wireshark para capturar tráfico sin errores de 'Permission Denied'.
+            </p>
+          </div>
+        </div>
+        <button onclick="runFixWiresharkPermissions()" class="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shrink-0 flex items-center space-x-1.5 transition shadow-lg shadow-blue-600/20">
+          <i class="fa-solid fa-wrench text-[10px]"></i>
+          <span>Reparar Permisos de Wireshark</span>
+        </button>
+      </div>
+
       <!-- Categories Highlights Carousel / Grid -->
       <div>
         <div class="flex items-center justify-between mb-4">

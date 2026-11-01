@@ -117,3 +117,13 @@ def test_package_adapter_anonsurf_atomic():
     adapted = adapt_install_command(cmd, pkg_manager="pacman")
     assert "anonsurf-arch" in adapted
     assert "sudo pacman -S --needed --noconfirm" in adapted
+
+
+def test_api_system_wireshark():
+    response = client.get("/api/system/wireshark")
+    assert response.status_code == 200
+    data = response.json()
+    assert "installed" in data
+    assert "in_group" in data
+    assert "fix_command" in data
+    assert "user" in data

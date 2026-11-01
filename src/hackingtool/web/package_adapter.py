@@ -608,3 +608,66 @@ def check_host_dependencies() -> dict:
         "setup_command": get_system_setup_command(),
         "tools": results,
     }
+
+
+def check_wireshark_status() -> dict:
+    """Audit Wireshark and network sniffing capabilities on the host."""
+    import getpass
+    import grp
+    has_wireshark = shutil.which("wireshark") is not None
+    has_tshark = shutil.which("tshark") is not None
+    dumpcap_path = shutil.which("dumpcap") or ("/usr/bin/dumpcap" if Path("/usr/bin/dumpcap").exists() else None)
+    has_dumpcap = dumpcap_path is not None
+
+    user = getpass.getuser()
+    in_wireshark_group = False
+    try:
+        user_groups = [g.gr_name for g in grp.getgrall() if user in g.gr_mem]
+        primary_group = grp.getgrgid(os.getgid()).gr_name
+        user_groups.append(primary_group)
+        in_wireshark_group = "wireshark" in user_groups
+    except Exception:
+        pass
+
+    dumpcap_can_exec = False
+    if dumpcap_path and os.path.exists(dumpcap_path):
+        dumpcap_can_exec = os.access(dumpcap_path, os.X_OK)
+
+    can_capture = (has_tshark or has_wireshark) and (in_wireshark_group or dumpcap_can_exec or (os.geteuid() == 0 if os.name != 'nt' else False))
+
+    family = detect_distro_family()
+    mgr = detect_pkg_manager()
+
+    if family == "arch" or mgr in ("pacman", "paru", "yay"):
+        fix_cmd = (
+            f"sudo pacman -S --needed --noconfirm wireshark-qt wireshark-cli && "
+            f"sudo usermod -aG wireshark {user} && "
+            f"sudo chmod 755 /usr/bin/dumpcap && "
+            f"sudo setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' /usr/bin/dumpcap"
+        )
+    elif family == "debian" or mgr in ("apt-get", "apt"):
+        fix_cmd = (
+            f"sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wireshark tshark && "
+            f"sudo usermod -aG wireshark {user} && "
+            f"sudo chmod 755 /usr/bin/dumpcap && "
+            f"sudo setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' /usr/bin/dumpcap"
+        )
+    else:
+        fix_cmd = (
+            f"sudo dnf install -y wireshark wireshark-cli && "
+            f"sudo usermod -aG wireshark {user} && "
+            f"sudo chmod 755 /usr/bin/dumpcap && "
+            f"sudo setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' /usr/bin/dumpcap"
+        )
+
+    return {
+        "installed": has_tshark or has_wireshark,
+        "has_gui": has_wireshark,
+        "has_cli": has_tshark,
+        "has_dumpcap": has_dumpcap,
+        "in_group": in_wireshark_group,
+        "dumpcap_can_exec": dumpcap_can_exec,
+        "can_capture": can_capture,
+        "fix_command": fix_cmd,
+        "user": user,
+    }

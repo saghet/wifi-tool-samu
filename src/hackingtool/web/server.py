@@ -36,6 +36,7 @@ from hackingtool.web.package_adapter import (
     detect_distro_family,
     resolve_command_binary,
     check_host_dependencies,
+    check_wireshark_status,
     get_system_setup_command,
 )
 
@@ -232,6 +233,12 @@ def get_system_info():
 def get_system_dependencies():
     """Return status of key cybersecurity packages on the host distro."""
     return check_host_dependencies()
+
+
+@app.get("/api/system/wireshark")
+def get_wireshark_info():
+    """Return Wireshark, Tshark, and dumpcap packet sniffing permission status."""
+    return check_wireshark_status()
 
 
 @app.get("/api/categories")
@@ -529,21 +536,7 @@ def test_ai_connection():
 async def terminal_websocket(websocket: WebSocket):
     await websocket.accept()
     current_proc: Optional[asyncio.subprocess.Process] = None
-
-    async def read_stream(stream, stream_name: str):
-        try:
-            while True:
-                # Read chunks up to 2048 bytes for instant unbuffered response
-                chunk = await stream.read(2048)
-                if not chunk:
-                    break
-                text = chunk.decode("utf-8", errors="replace")
-                try:
-                    await websocket.send_json({"type": stream_name, "data": text})
-                except Exception:
-                    break
-        except Exception:
-            pass
+    current_master_fd: Optional[int] = None
 
     try:
         while True:
@@ -571,13 +564,6 @@ async def terminal_websocket(websocket: WebSocket):
 
                 cwd = msg.get("cwd") or str(get_tools_dir())
 
-                # If command expects a subfolder in tools_dir (e.g. git repo), cd into it if exists
-                match_clone = re.search(r"git clone\s+(?:https?://[^\s]+/)?([\w\-]+)(?:\.git)?", command)
-                if match_clone:
-                    repo_folder = match_clone.group(1)
-                else:
-                    repo_folder = None
-
                 await websocket.send_json({
                     "type": "start",
                     "command": command,
@@ -586,6 +572,9 @@ async def terminal_websocket(websocket: WebSocket):
                 })
 
                 try:
+                    import pty
+                    import errno
+
                     # Enriched environment with PATH including venv and local binaries
                     env = os.environ.copy()
                     venv_bin = str(PROJECT_ROOT / ".venv" / "bin")
@@ -594,21 +583,69 @@ async def terminal_websocket(websocket: WebSocket):
                     env["PYTHONUNBUFFERED"] = "1"
                     env["TERM"] = "xterm-256color"
 
+                    # Allocate a real pseudo-terminal (PTY) so sudo, pacman, and interactive prompts work
+                    master_fd, slave_fd = pty.openpty()
+                    os.set_blocking(master_fd, False)
+                    current_master_fd = master_fd
+
+                    loop = asyncio.get_running_loop()
+                    read_queue = asyncio.Queue()
+
+                    def pty_read_callback():
+                        try:
+                            data = os.read(master_fd, 2048)
+                            if data:
+                                read_queue.put_nowait(data)
+                        except OSError as e:
+                            if e.errno in (errno.EIO, errno.EBADF):
+                                try:
+                                    loop.remove_reader(master_fd)
+                                except Exception:
+                                    pass
+                                read_queue.put_nowait(None)
+                            else:
+                                read_queue.put_nowait(None)
+
+                    loop.add_reader(master_fd, pty_read_callback)
+
                     current_proc = await asyncio.create_subprocess_shell(
                         command,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        stdin=asyncio.subprocess.PIPE,
+                        stdin=slave_fd,
+                        stdout=slave_fd,
+                        stderr=slave_fd,
                         cwd=cwd,
                         executable="/bin/bash",
                         env=env,
+                        close_fds=True,
                     )
+                    os.close(slave_fd)
 
-                    stdout_task = asyncio.create_task(read_stream(current_proc.stdout, "stdout"))
-                    stderr_task = asyncio.create_task(read_stream(current_proc.stderr, "stderr"))
+                    async def pump_pty():
+                        try:
+                            while True:
+                                chunk = await read_queue.get()
+                                if chunk is None:
+                                    break
+                                text = chunk.decode("utf-8", errors="replace")
+                                await websocket.send_json({"type": "stdout", "data": text})
+                        except Exception:
+                            pass
 
+                    pump_task = asyncio.create_task(pump_pty())
                     returncode = await current_proc.wait()
-                    await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+
+                    try:
+                        loop.remove_reader(master_fd)
+                    except Exception:
+                        pass
+                    read_queue.put_nowait(None)
+                    await asyncio.sleep(0.05)
+                    try:
+                        os.close(master_fd)
+                    except OSError:
+                        pass
+                    current_master_fd = None
+                    await pump_task
 
                     if returncode == 127:
                         setup_cmd = get_system_setup_command()
@@ -628,6 +665,14 @@ async def terminal_websocket(websocket: WebSocket):
                         "command": command
                     })
                 except Exception as exc:
+                    if current_master_fd is not None:
+                        try:
+                            loop = asyncio.get_running_loop()
+                            loop.remove_reader(current_master_fd)
+                            os.close(current_master_fd)
+                        except Exception:
+                            pass
+                        current_master_fd = None
                     await websocket.send_json({
                         "type": "stderr",
                         "data": f"Execution error: {exc}\n"
@@ -649,18 +694,22 @@ async def terminal_websocket(websocket: WebSocket):
 
             elif action == "input":
                 data = msg.get("data", "")
-                if current_proc and current_proc.stdin and current_proc.returncode is None:
+                if current_proc and current_proc.returncode is None and current_master_fd is not None:
                     try:
-                        current_proc.stdin.write(data.encode())
-                        await current_proc.stdin.drain()
-                        # Echo input back to terminal window
-                        await websocket.send_json({"type": "stdout", "data": data})
+                        os.write(current_master_fd, data.encode())
                     except Exception as e:
                         await websocket.send_json({"type": "stderr", "data": f"\nInput error: {e}\n"})
                 else:
                     await websocket.send_json({"type": "stderr", "data": "\nNo active process listening for input.\n"})
 
     except WebSocketDisconnect:
+        if current_master_fd is not None:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.remove_reader(current_master_fd)
+                os.close(current_master_fd)
+            except Exception:
+                pass
         if current_proc and current_proc.returncode is None:
             try:
                 current_proc.terminate()

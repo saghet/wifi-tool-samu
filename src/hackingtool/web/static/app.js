@@ -33,6 +33,7 @@ async function initApp() {
     await Promise.all([
       loadSystemInfo(),
       loadSystemDependencies(),
+      loadWiresharkStatus(),
       loadCategories(),
       loadTools(),
       loadTags(),
@@ -171,6 +172,46 @@ function runInstallSystemDeps() {
   }
   switchTab('terminal');
   runCommand(state.dependencies.setup_command);
+}
+
+// ── Wireshark & Sniffing Audit ────────────────────────────────────────────────
+
+async function loadWiresharkStatus() {
+  try {
+    const res = await fetch('/api/system/wireshark');
+    if (!res.ok) return;
+    state.wireshark = await res.json();
+    renderWiresharkBanner();
+  } catch (err) {
+    console.warn('Failed to load wireshark status:', err);
+  }
+}
+
+function renderWiresharkBanner() {
+  const ws = state.wireshark;
+  if (!ws) return;
+  const banner = document.getElementById('wireshark-audit-banner');
+  if (!banner) return;
+
+  if (ws.can_capture) {
+    banner.classList.add('hidden');
+  } else {
+    banner.classList.remove('hidden');
+    const desc = document.getElementById('wireshark-audit-desc');
+    if (desc) {
+      if (!ws.installed) {
+        desc.textContent = 'Wireshark y Tshark no están instalados aún en tu sistema Linux.';
+      } else if (!ws.in_group || !ws.dumpcap_can_exec) {
+        desc.textContent = `Wireshark está instalado pero el usuario '${ws.user}' carece de permisos de captura en interfaces (falta grupo wireshark / CAP_NET_RAW en dumpcap). Haz clic en Reparar para solucionarlo.`;
+      }
+    }
+  }
+}
+
+function runFixWiresharkPermissions() {
+  if (!state.wireshark || !state.wireshark.fix_command) return;
+  switchTab('terminal');
+  runCommand(state.wireshark.fix_command);
 }
 
 // ── Categories ─────────────────────────────────────────────────────────────────
@@ -653,7 +694,10 @@ function updateTerminalInputUI(running) {
   } else {
     indicator.textContent = 'LISTO';
     indicator.className = 'text-[10px] text-green-400 font-mono';
-    if (input) input.placeholder = 'Introduce comando bash (ej: nmap -sn 192.168.1.0/24)...';
+    if (input) {
+      input.type = 'text';
+      input.placeholder = 'Introduce comando bash (ej: nmap -sn 192.168.1.0/24)...';
+    }
     if (submitBtn) {
       submitBtn.textContent = 'Ejecutar';
       submitBtn.className = 'px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-mono font-medium transition';
@@ -665,19 +709,29 @@ function handleWsMessage(msg) {
   if (msg.type === 'start') {
     updateTerminalInputUI(true);
     appendTerminalOutput(`\n\x1b[36m[START]\x1b[0m Ejecutando: \x1b[1;32m${msg.command}\x1b[0m en \x1b[33m${msg.cwd}\x1b[0m\n`);
-  } else if (msg.type === 'stdout') {
+  } else if (msg.type === 'stdout' || msg.type === 'stderr') {
     appendTerminalOutput(msg.data);
-  } else if (msg.type === 'stderr') {
-    appendTerminalOutput(msg.data);
+    const lower = msg.data.toLowerCase();
+    if (lower.includes('password for') || lower.includes('[sudo]') || lower.includes('contraseña para')) {
+      const input = document.getElementById('terminal-input');
+      if (input) {
+        input.type = 'password';
+        input.placeholder = '🔑 Contraseña de sudo requerida: escribe tu clave y pulsa Enter / Enviar Entrada...';
+        input.focus();
+      }
+    }
   } else if (msg.type === 'exit') {
     updateTerminalInputUI(false);
+    const input = document.getElementById('terminal-input');
+    if (input) input.type = 'text';
     const codeColor = msg.code === 0 ? '\x1b[32m' : '\x1b[31m';
     appendTerminalOutput(`\n\x1b[36m[EXIT]\x1b[0m Proceso finalizado con código: ${codeColor}${msg.code}\x1b[0m\n──────────────────────────────────────────────────────────────────────────\n`);
     // Refresh tools status in background if an install just completed
-    if (msg.command && (msg.command.includes('pacman') || msg.command.includes('apt') || msg.command.includes('clone') || msg.command.includes('dnf') || msg.command.includes('zypper'))) {
+    if (msg.command && (msg.command.includes('pacman') || msg.command.includes('apt') || msg.command.includes('clone') || msg.command.includes('dnf') || msg.command.includes('zypper') || msg.command.includes('wireshark') || msg.command.includes('dumpcap'))) {
       setTimeout(loadTools, 1500);
       setTimeout(loadSystemInfo, 1500);
       setTimeout(loadSystemDependencies, 1500);
+      setTimeout(loadWiresharkStatus, 1500);
     }
   }
 }
