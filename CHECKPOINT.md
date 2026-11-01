@@ -97,3 +97,18 @@ Confirma que lees el CHECKPOINT.md y dime qué siguiente tarea deseas que realic
   - Encadenamiento completo de comandos de instalación (`cmds.join(' && ')`).
   - Verificación inteligente al hacer clic en "Ejecutar": si la herramienta no está instalada, pregunta al usuario y ofrece instalarla de inmediato con 1 clic.
   - Soporte de entrada interactiva para responder prompts y contraseñas de `sudo` en el input de la terminal.
+
+---
+
+## 5. Auditoría Exhaustiva de Herramientas y Soporte Nativo de Anonymously Surf (2026-11-01)
+
+### Diagnóstico de Anonymously Surf:
+- El repositorio upstream original (`Und3rf10w/kali-anonsurf`) utilizaba `installer.sh` con `apt-get` y `dpkg -i kali-anonsurf.deb`.
+- En Arch Linux / CachyOS esto provocaba fallo inmediato por ausencia del sistema de paquetes Debian.
+- Se implementó la integración nativa con `quantumcore/anonsurf-arch`, adaptando la instalación automática de binarios y configuraciones (`anonsurf`, `pandora`, `/etc/tor/torrc.anon`).
+- `anonsurf` ahora reporta estado `is_installed: true` y comandos funcionales (`sudo anonsurf start`, `sudo anonsurf stop`, `sudo anonsurf status`).
+
+### Auditoría Global de las 263 Herramientas:
+- Se identificaron **54 herramientas** con llamadas hardcodeadas a `apt-get`, `dpkg` o paquetes `.deb`.
+- Se amplió `package_adapter.py` para procesar comandos encadenados (`&&` y `;`) preservando todos los pasos intermedios y mapeando 100% de los paquetes Debian a `pacman` y `paru`.
+- Casos especiales como `RustScan` (.deb), `Masscan`, `Pixiewps`, `SocialFish`, `Ghidra`, `ZAP`, `Bettercap` y `BloodHound/Neo4j` ahora se traducen y ejecutan en Arch Linux sin errores.
