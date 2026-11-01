@@ -32,6 +32,7 @@ async function initApp() {
   try {
     await Promise.all([
       loadSystemInfo(),
+      loadSystemDependencies(),
       loadCategories(),
       loadTools(),
       loadTags(),
@@ -92,6 +93,84 @@ async function loadSystemInfo() {
   } catch (err) {
     console.warn('Failed to load system info:', err);
   }
+}
+
+// ── System Dependencies & Forensic Audit ───────────────────────────────────────
+
+async function loadSystemDependencies() {
+  try {
+    const res = await fetch('/api/system/dependencies');
+    if (!res.ok) return;
+    state.dependencies = await res.json();
+    renderSystemDependencies();
+  } catch (err) {
+    console.warn('Failed to load system dependencies:', err);
+  }
+}
+
+function renderSystemDependencies() {
+  const deps = state.dependencies;
+  if (!deps) return;
+
+  const pct = Math.round((deps.installed_count / (deps.total || 1)) * 100);
+  const bar = document.getElementById('deps-progress-bar');
+  if (bar) bar.style.width = `${pct}%`;
+
+  const pill = document.getElementById('deps-status-pill');
+  if (pill) {
+    if (deps.missing_count === 0) {
+      pill.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-green-500/10 text-green-400 border border-green-500/30';
+      pill.textContent = '100% Componentes Listos';
+    } else {
+      pill.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-yellow-500/10 text-yellow-400 border border-yellow-500/30';
+      pill.textContent = `${deps.installed_count}/${deps.total} Instalados (${deps.missing_count} faltantes)`;
+    }
+  }
+
+  const desc = document.getElementById('deps-status-desc');
+  if (desc) {
+    desc.textContent = `Distribución: ${deps.distro_family.toUpperCase()} | Gestor: ${deps.pkg_manager}. ${deps.missing_count > 0 ? `Faltan herramientas esenciales como ${deps.tools.filter(t => !t.installed).slice(0, 3).map(t => t.name).join(', ')}...` : 'Todos los paquetes base de pentesting están instalados correctamente.'}`;
+  }
+
+  // Populate audit table in modal
+  const tbody = document.getElementById('deps-table-body');
+  if (tbody) {
+    tbody.innerHTML = deps.tools.map(t => `
+      <tr class="hover:bg-[#1A202C]/40 transition">
+        <td class="p-2.5 font-medium text-white flex items-center space-x-2">
+          <span>${t.name}</span>
+        </td>
+        <td class="p-2.5 text-gray-400">${t.category}</td>
+        <td class="p-2.5">
+          ${t.installed 
+            ? '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20"><i class="fa-solid fa-check text-[9px] mr-1"></i>Instalado</span>'
+            : '<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20"><i class="fa-solid fa-xmark text-[9px] mr-1"></i>Faltante</span>'}
+        </td>
+        <td class="p-2.5 font-mono text-[11px] text-gray-400">${t.path}</td>
+      </tr>
+    `).join('');
+  }
+
+  const cmdText = document.getElementById('deps-setup-cmd-text');
+  if (cmdText) cmdText.textContent = deps.setup_command;
+
+  const countText = document.getElementById('deps-modal-count-text');
+  if (countText) countText.textContent = `${deps.installed_count} de ${deps.total} componentes listos en ${deps.distro_family}`;
+}
+
+function toggleDepsDetailModal() {
+  const modal = document.getElementById('deps-modal');
+  if (!modal) return;
+  modal.classList.toggle('hidden');
+}
+
+function runInstallSystemDeps() {
+  if (!state.dependencies || !state.dependencies.setup_command) {
+    alert('No se ha podido resolver el comando de instalación para esta distribución.');
+    return;
+  }
+  switchTab('terminal');
+  runCommand(state.dependencies.setup_command);
 }
 
 // ── Categories ─────────────────────────────────────────────────────────────────
@@ -595,9 +674,10 @@ function handleWsMessage(msg) {
     const codeColor = msg.code === 0 ? '\x1b[32m' : '\x1b[31m';
     appendTerminalOutput(`\n\x1b[36m[EXIT]\x1b[0m Proceso finalizado con código: ${codeColor}${msg.code}\x1b[0m\n──────────────────────────────────────────────────────────────────────────\n`);
     // Refresh tools status in background if an install just completed
-    if (msg.command && (msg.command.includes('pacman') || msg.command.includes('apt') || msg.command.includes('clone'))) {
+    if (msg.command && (msg.command.includes('pacman') || msg.command.includes('apt') || msg.command.includes('clone') || msg.command.includes('dnf') || msg.command.includes('zypper'))) {
       setTimeout(loadTools, 1500);
       setTimeout(loadSystemInfo, 1500);
+      setTimeout(loadSystemDependencies, 1500);
     }
   }
 }

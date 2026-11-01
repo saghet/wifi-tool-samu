@@ -30,7 +30,14 @@ import hackingtool.ai_command as ai_command
 import hackingtool.engagement as engagement_mod
 import hackingtool.findings as findings_mod
 from hackingtool.cli import all_tools, tool_definitions
-from hackingtool.web.package_adapter import adapt_install_command, detect_pkg_manager, detect_distro_family
+from hackingtool.web.package_adapter import (
+    adapt_install_command,
+    detect_pkg_manager,
+    detect_distro_family,
+    resolve_command_binary,
+    check_host_dependencies,
+    get_system_setup_command,
+)
 
 app = FastAPI(
     title="HackingTool Web Suite",
@@ -219,6 +226,12 @@ def get_system_info():
         "has_ai_key": has_key,
         "server_time": datetime.now().isoformat(),
     }
+
+
+@app.get("/api/system/dependencies")
+def get_system_dependencies():
+    """Return status of key cybersecurity packages on the host distro."""
+    return check_host_dependencies()
 
 
 @app.get("/api/categories")
@@ -549,10 +562,11 @@ async def terminal_websocket(websocket: WebSocket):
 
                 # Automatically adapt package manager commands (e.g. apt -> pacman)
                 command = adapt_install_command(raw_command)
+                command = resolve_command_binary(command)
                 if command != raw_command:
                     await websocket.send_json({
                         "type": "stdout",
-                        "data": f"\x1b[33m[Adaptador de Sistema]\x1b[0m Comando adaptado para {detect_pkg_manager()}:\n  \x1b[32m{command}\x1b[0m\n\n"
+                        "data": f"\x1b[33m[Adaptador de Sistema]\x1b[0m Comando adaptado para {detect_pkg_manager()} ({detect_distro_family()}):\n  \x1b[32m{command}\x1b[0m\n\n"
                     })
 
                 cwd = msg.get("cwd") or str(get_tools_dir())
@@ -595,6 +609,18 @@ async def terminal_websocket(websocket: WebSocket):
 
                     returncode = await current_proc.wait()
                     await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+
+                    if returncode == 127:
+                        setup_cmd = get_system_setup_command()
+                        await websocket.send_json({
+                            "type": "stderr",
+                            "data": (
+                                f"\n\x1b[33m[Diagnóstico Forense]\x1b[0m Comando no encontrado (Exit 127).\n"
+                                f"La herramienta o dependencia no está instalada en tu sistema ({detect_distro_family()} / {detect_pkg_manager()}).\n"
+                                f"💡 Puedes instalar los componentes del sistema con el botón en el Dashboard o ejecutando:\n"
+                                f"  \x1b[32m{setup_cmd}\x1b[0m\n\n"
+                            )
+                        })
 
                     await websocket.send_json({
                         "type": "exit",

@@ -88,7 +88,7 @@ def _cmd_logger() -> logging.Logger:
     return logger
 
 
-def _run_shell(cmd: str) -> int:
+def _run_shell(cmd: str, cwd: str | None = None) -> int:
     """Run a catalog/tool shell one-liner and return its real exit code.
 
     Catalog commands are user-chosen shell strings (with &&, pipes, redirects),
@@ -98,12 +98,14 @@ def _run_shell(cmd: str) -> int:
     ponytail: shell=True is intentional — opt-in commands the user selected, not
     attacker input.
     """
+    from hackingtool.config import get_tools_dir
+    run_cwd = cwd or str(get_tools_dir())
     try:
-        rc = subprocess.run(cmd, shell=True).returncode
+        rc = subprocess.run(cmd, shell=True, cwd=run_cwd).returncode
     except KeyboardInterrupt:
         console.print("\n[warning]⚠ Interrupted.[/warning]")
         rc = 130
-    _cmd_logger().info("exit=%s :: %s", rc, cmd)
+    _cmd_logger().info("exit=%s cwd=%s :: %s", rc, run_cwd, cmd)
     return rc
 
 
@@ -184,6 +186,9 @@ class HackingTool:
     @property
     def is_installed(self) -> bool:
         """Check if the tool's binary is on PATH or its clone dir exists."""
+        from hackingtool.config import get_tools_dir
+        tools_dir = get_tools_dir()
+
         # Resources (sites/services) are never "installed" — don't nag or count them.
         if self.KIND == "resource":
             return True
@@ -202,15 +207,21 @@ class HackingTool:
             if binary and binary not in (".", "echo", "cd"):
                 if shutil.which(binary):
                     return True
-        # Check if git clone target dir exists
+        # Check if git clone target dir exists (in tools_dir or local cwd)
         if self.INSTALL_COMMANDS:
             for ic in self.INSTALL_COMMANDS:
                 if "git clone" in ic:
                     parts = ic.split()
                     repo_url = [p for p in parts if p.startswith("http")]
                     if repo_url:
-                        dirname = repo_url[0].rstrip("/").rsplit("/", 1)[-1].replace(".git", "")
-                        if os.path.isdir(dirname):
+                        url = repo_url[0]
+                        repo_name = url.rstrip("/").rsplit("/", 1)[-1].replace(".git", "")
+                        # Check custom target directory if provided (e.g. git clone url target_dir)
+                        url_idx = parts.index(url)
+                        target_args = [p for p in parts[url_idx + 1:] if not p.startswith("-")]
+                        target_name = target_args[0] if target_args else repo_name
+
+                        if (tools_dir / target_name).is_dir() or os.path.isdir(target_name) or (tools_dir / repo_name).is_dir() or os.path.isdir(repo_name):
                             return True
         return False
 
@@ -347,15 +358,24 @@ class HackingTool:
         """Strict reuse-first signal for skipping install: trust an explicit
         system binary (system_pkgs.which) or an existing clone dir, but NOT the
         RUN_COMMANDS interpreter heuristic (which false-positives on python3/go)."""
+        from hackingtool.config import get_tools_dir
+        tools_dir = get_tools_dir()
+
         which = (self.SYSTEM_PKGS or {}).get("which")
         if which and shutil.which(which):
             return True
         for ic in (self.INSTALL_COMMANDS or []):
             if "git clone" in ic:
-                repo = [p for p in ic.split() if p.startswith("http")]
+                parts = ic.split()
+                repo = [p for p in parts if p.startswith("http")]
                 if repo:
-                    d = repo[0].rstrip("/").rsplit("/", 1)[-1].replace(".git", "")
-                    if os.path.isdir(d):
+                    url = repo[0]
+                    repo_name = url.rstrip("/").rsplit("/", 1)[-1].replace(".git", "")
+                    url_idx = parts.index(url)
+                    target_args = [p for p in parts[url_idx + 1:] if not p.startswith("-")]
+                    target_name = target_args[0] if target_args else repo_name
+
+                    if (tools_dir / target_name).is_dir() or os.path.isdir(target_name) or (tools_dir / repo_name).is_dir() or os.path.isdir(repo_name):
                         return True
         return False
 

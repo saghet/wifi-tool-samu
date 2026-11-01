@@ -90,3 +90,30 @@ def test_package_adapter_ubuntu_debian():
     from hackingtool.web.package_adapter import _adapt_single_step
     deb_cmd = _adapt_single_step("sudo apt-get install -y proxychains4", mgr="apt-get", family="debian")
     assert "apt-get install -y proxychains4" in deb_cmd
+
+
+def test_api_system_dependencies():
+    response = client.get("/api/system/dependencies")
+    assert response.status_code == 200
+    data = response.json()
+    assert "distro_family" in data
+    assert "pkg_manager" in data
+    assert "setup_command" in data
+    assert "tools" in data
+    assert len(data["tools"]) >= 20
+
+
+def test_package_adapter_idempotent_git():
+    from hackingtool.web.package_adapter import adapt_install_command
+    cmd = "git clone https://github.com/foo/bar.git && cd bar && ./install.sh"
+    adapted = adapt_install_command(cmd)
+    assert "git pull" in adapted
+    assert "cd bar" in adapted
+
+
+def test_package_adapter_anonsurf_atomic():
+    from hackingtool.web.package_adapter import adapt_install_command
+    cmd = "git clone https://github.com/Und3rf10w/kali-anonsurf.git && cd kali-anonsurf && sudo ./installer.sh"
+    adapted = adapt_install_command(cmd, pkg_manager="pacman")
+    assert "anonsurf-arch" in adapted
+    assert "sudo pacman -S --needed --noconfirm" in adapted
