@@ -30,7 +30,7 @@ import hackingtool.ai_command as ai_command
 import hackingtool.engagement as engagement_mod
 import hackingtool.findings as findings_mod
 from hackingtool.cli import all_tools, tool_definitions
-from hackingtool.web.package_adapter import adapt_install_command, detect_pkg_manager
+from hackingtool.web.package_adapter import adapt_install_command, detect_pkg_manager, detect_distro_family
 
 app = FastAPI(
     title="HackingTool Web Suite",
@@ -207,6 +207,7 @@ def get_system_info():
         "os_release": platform.release(),
         "os_machine": platform.machine(),
         "pkg_manager": detect_pkg_manager(),
+        "distro_family": detect_distro_family(),
         "python_version": platform.python_version(),
         "hackingtool_version": VERSION_DISPLAY,
         "total_categories": len(_cats),

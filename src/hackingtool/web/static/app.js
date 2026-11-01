@@ -80,7 +80,8 @@ async function loadSystemInfo() {
     document.getElementById('stat-total-tools').textContent = state.system.total_tools;
     document.getElementById('stat-installed-tools').textContent = state.system.installed_tools;
     document.getElementById('stat-categories').textContent = state.system.total_categories;
-    document.getElementById('stat-host-os').textContent = `${state.system.os_name} (${state.system.pkg_manager || state.system.os_machine})`;
+    const distroName = state.system.distro_family === 'arch' ? 'Garuda/Arch' : (state.system.distro_family === 'rhel' ? 'Red Hat/Fedora' : (state.system.distro_family === 'debian' ? 'Ubuntu/Debian' : state.system.os_name));
+    document.getElementById('stat-host-os').textContent = `${distroName} (${state.system.pkg_manager || 'sys'})`;
     document.getElementById('stat-python-ver').textContent = `Python ${state.system.python_version}`;
 
     document.getElementById('dash-hero-tools').textContent = state.system.total_tools;

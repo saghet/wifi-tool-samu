@@ -60,7 +60,7 @@ def detect() -> OSInfo:
         info.distro_version = os_release.get("VERSION_ID", "")
 
     # ── Package manager detection (in priority order) ──────────────────────────
-    for mgr in ("apt-get", "pacman", "dnf", "zypper", "apk", "brew", "pkg"):
+    for mgr in ("pacman", "paru", "yay", "apt-get", "apt", "dnf", "yum", "zypper", "apk", "brew", "pkg"):
         if shutil.which(mgr):
             info.pkg_manager = mgr
             break
@@ -75,8 +75,12 @@ CURRENT_OS: OSInfo = detect()
 # ── Per-OS package manager commands ────────────────────────────────────────────
 PACKAGE_INSTALL_CMDS: dict[str, str] = {
     "apt-get": "apt-get install -y {packages}",
+    "apt":     "apt install -y {packages}",
     "pacman":  "pacman -S --noconfirm {packages}",
+    "paru":    "paru -S --noconfirm {packages}",
+    "yay":     "yay -S --noconfirm {packages}",
     "dnf":     "dnf install -y {packages}",
+    "yum":     "yum install -y {packages}",
     "zypper":  "zypper install -y {packages}",
     "apk":     "apk add {packages}",
     "brew":    "brew install {packages}",
@@ -85,8 +89,12 @@ PACKAGE_INSTALL_CMDS: dict[str, str] = {
 
 PACKAGE_UPDATE_CMDS: dict[str, str] = {
     "apt-get": "apt-get update -qq && apt-get upgrade -y",
+    "apt":     "apt update -qq && apt upgrade -y",
     "pacman":  "pacman -Syu --noconfirm",
+    "paru":    "paru -Syu --noconfirm",
+    "yay":     "yay -Syu --noconfirm",
     "dnf":     "dnf upgrade -y",
+    "yum":     "yum update -y",
     "zypper":  "zypper update -y",
     "apk":     "apk update && apk upgrade",
     "brew":    "brew update && brew upgrade",
@@ -99,7 +107,13 @@ REQUIRED_PACKAGES: dict[str, list[str]] = {
                 "ruby", "ruby-dev", "golang-go", "php", "default-jre-headless"],
     "pacman":  ["git", "python-pip", "curl", "wget",
                 "ruby", "go", "php", "jre-openjdk-headless"],
+    "paru":    ["git", "python-pip", "curl", "wget",
+                "ruby", "go", "php", "jre-openjdk-headless"],
+    "yay":     ["git", "python-pip", "curl", "wget",
+                "ruby", "go", "php", "jre-openjdk-headless"],
     "dnf":     ["git", "python3-pip", "curl", "wget",
+                "ruby", "golang", "php", "java-17-openjdk-headless"],
+    "yum":     ["git", "python3-pip", "curl", "wget",
                 "ruby", "golang", "php", "java-17-openjdk-headless"],
     "zypper":  ["git", "python3-pip", "curl", "wget", "ruby", "go", "php"],
     "brew":    ["git", "python3", "curl", "wget", "ruby", "go", "php"],

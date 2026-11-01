@@ -68,8 +68,25 @@ def test_api_config():
     assert "ai_provider" in cfg
 
 
-def test_package_adapter_arch():
-    from hackingtool.web.package_adapter import adapt_install_command
-    arch_cmd = adapt_install_command("sudo apt-get install -y proxychains4", pkg_manager="pacman")
+def test_package_adapter_arch_garuda():
+    from hackingtool.web.package_adapter import _adapt_single_step
+    arch_cmd = _adapt_single_step("sudo apt-get install -y proxychains4 wireshark build-essential", mgr="pacman", family="arch")
     assert "pacman -S" in arch_cmd
     assert "proxychains-ng" in arch_cmd
+    assert "wireshark-qt" in arch_cmd
+    assert "base-devel" in arch_cmd
+
+
+def test_package_adapter_redhat():
+    from hackingtool.web.package_adapter import _adapt_single_step
+    rhel_cmd = _adapt_single_step("sudo apt-get install -y proxychains4 libssl-dev build-essential", mgr="dnf", family="rhel")
+    assert ("dnf install -y" in rhel_cmd or "yum install -y" in rhel_cmd)
+    assert "proxychains-ng" in rhel_cmd
+    assert "openssl-devel" in rhel_cmd
+    assert "gcc" in rhel_cmd
+
+
+def test_package_adapter_ubuntu_debian():
+    from hackingtool.web.package_adapter import _adapt_single_step
+    deb_cmd = _adapt_single_step("sudo apt-get install -y proxychains4", mgr="apt-get", family="debian")
+    assert "apt-get install -y proxychains4" in deb_cmd

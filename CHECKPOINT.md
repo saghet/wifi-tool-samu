@@ -112,3 +112,18 @@ Confirma que lees el CHECKPOINT.md y dime qué siguiente tarea deseas que realic
 - Se identificaron **54 herramientas** con llamadas hardcodeadas a `apt-get`, `dpkg` o paquetes `.deb`.
 - Se amplió `package_adapter.py` para procesar comandos encadenados (`&&` y `;`) preservando todos los pasos intermedios y mapeando 100% de los paquetes Debian a `pacman` y `paru`.
 - Casos especiales como `RustScan` (.deb), `Masscan`, `Pixiewps`, `SocialFish`, `Ghidra`, `ZAP`, `Bettercap` y `BloodHound/Neo4j` ahora se traducen y ejecutan en Arch Linux sin errores.
+
+---
+
+## 6. Soporte Multi-Distribución Garantizado: Ubuntu, Garuda y Red Hat (2026-11-01)
+
+- **Plataformas Soportadas:**
+  1. **Ubuntu / Debian / Kali / Parrot:** Gestión con `apt-get` / `apt` nativa.
+  2. **Garuda Linux / Arch Linux / Manjaro / CachyOS:** Traducción automática a `pacman`, `paru` y `yay`, soporte nativo de `anonsurf-arch` y dependencias de Chaotic-AUR.
+  3. **Red Hat Enterprise Linux / Fedora / CentOS Stream / Rocky / AlmaLinux:** Traducción automática a `dnf` y `yum`, soporte para paquetes `-devel` y JDK 17.
+- **Componentes Auditados:**
+  - `os_detect.py`: Detección de distros (`garuda`, `rhel`, `fedora`, `arch`, `ubuntu`) y gestores (`pacman`, `paru`, `yay`, `dnf`, `yum`, `apt`).
+  - `package_adapter.py`: Mapeo tripartito completo para 54 herramientas críticas y comandos encadenados.
+  - `server.py`: API `/api/system` expone `distro_family` y `pkg_manager`.
+  - `app.js`: Métricas en tiempo real mostrando la distribución del host.
+  - `tests/test_web.py`: Suite con 10 pruebas unitarias validando las 3 plataformas.
