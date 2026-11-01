@@ -482,9 +482,34 @@ function runInstallTool(toolId) {
   runCommand(fullInstallCmd);
 }
 
-function runToolCommand(toolId) {
+async function runToolCommand(toolId) {
   const tool = state.tools.find(t => t.id === toolId);
   if (!tool) return;
+
+  // Pre-flight check: verify with backend if the binary is present in host PATH
+  try {
+    const res = await fetch(`/api/tools/${toolId}/check-executable`);
+    if (res.ok) {
+      const check = await res.json();
+      if (!check.is_executable) {
+        const binName = check.binary || tool.title;
+        const wantInstall = confirm(
+          `⚠️ Componente no detectado en el sistema:\n\n` +
+          `El binario o paquete '${binName}' no está instalado en tu sistema (${state.system?.distro_family || 'Garuda Linux'}).\n\n` +
+          `¿Deseas instalarlo automáticamente ahora con 1 clic antes de ejecutarlo?`
+        );
+        if (wantInstall) {
+          runInstallTool(toolId);
+          return;
+        } else {
+          const forceRun = confirm(`¿Deseas forzar la ejecución del comando de todos modos en la terminal?`);
+          if (!forceRun) return;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Pre-flight check error:', err);
+  }
 
   // Resolve best command to run
   let cmd = '';
@@ -492,18 +517,6 @@ function runToolCommand(toolId) {
     cmd = tool.run_commands[0];
   } else if (tool.usage && tool.usage.length > 0) {
     cmd = tool.usage[0].command;
-  }
-
-  if (!tool.is_installed) {
-    const wantInstall = confirm(
-      `⚠️ La herramienta '${tool.title}' no está instalada en tu sistema aún.\n\n` +
-      `¿Deseas ejecutar su instalación ahora?\n` +
-      `(Si eliges 'Cancelar', se intentará ejecutar el comando de todos modos).`
-    );
-    if (wantInstall) {
-      runInstallTool(toolId);
-      return;
-    }
   }
 
   if (!cmd) {

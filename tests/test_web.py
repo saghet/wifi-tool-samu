@@ -128,3 +128,19 @@ def test_api_system_wireshark():
     assert "in_group" in data
     assert "fix_command" in data
     assert "user" in data
+
+
+def test_api_check_tool_executable():
+    # Fetch all tools to get a valid tool id
+    tools_res = client.get("/api/tools")
+    assert tools_res.status_code == 200
+    tools = tools_res.json()
+    assert len(tools) > 0
+    sample_id = tools[0]["id"]
+
+    res = client.get(f"/api/tools/{sample_id}/check-executable")
+    assert res.status_code == 200
+    data = res.json()
+    assert "is_executable" in data
+    assert "binary" in data
+    assert "command" in data

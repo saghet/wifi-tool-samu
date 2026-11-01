@@ -295,6 +295,52 @@ def get_tool_detail(tool_id: str):
     raise HTTPException(status_code=404, detail="Tool not found")
 
 
+@app.get("/api/tools/{tool_id}/check-executable")
+def check_tool_executable(tool_id: str):
+    """Pre-flight check: verify if the tool binary is present in host PATH."""
+    _cats, tools, _tags = get_catalog_data()
+    tool = None
+    for t in tools:
+        if t["id"] == tool_id:
+            tool = t
+            break
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+
+    cmd = ""
+    if tool.get("run_commands") and len(tool["run_commands"]) > 0:
+        cmd = tool["run_commands"][0]
+    elif tool.get("usage") and len(tool["usage"]) > 0:
+        cmd = tool["usage"][0]["command"]
+
+    binary = ""
+    if cmd:
+        subcmd = cmd.split("&&")[-1].strip()
+        if subcmd.startswith("sudo "):
+            subcmd = subcmd[5:].strip()
+        binary = subcmd.split()[0] if subcmd else ""
+
+    is_available = False
+    bin_path = None
+    if binary and binary not in (".", "cd", "echo", "python", "python3", "bash", "sh"):
+        bin_path = shutil.which(binary)
+        is_available = bin_path is not None
+    elif binary in ("python", "python3", "bash", "sh"):
+        is_available = True
+    else:
+        is_available = tool.get("is_installed", False)
+
+    return {
+        "id": tool["id"],
+        "title": tool["title"],
+        "command": cmd,
+        "binary": binary,
+        "is_executable": is_available,
+        "binary_path": bin_path,
+        "install_commands": tool.get("install_commands", []),
+    }
+
+
 @app.get("/api/tags")
 def get_tags():
     _cats, _tools, tags_count = get_catalog_data()
@@ -539,6 +585,12 @@ async def terminal_websocket(websocket: WebSocket):
     current_proc: Optional[asyncio.subprocess.Process] = None
     current_master_fd: Optional[int] = None
 
+    async def safe_send(payload: dict):
+        try:
+            await websocket.send_json(payload)
+        except Exception:
+            pass
+
     try:
         while True:
             msg = await websocket.receive_json()
@@ -547,11 +599,11 @@ async def terminal_websocket(websocket: WebSocket):
             if action == "run":
                 raw_command = msg.get("command", "").strip()
                 if not raw_command:
-                    await websocket.send_json({"type": "stderr", "data": "Error: Empty command\n"})
+                    await safe_send({"type": "stderr", "data": "Error: Empty command\n"})
                     continue
 
                 if current_proc and current_proc.returncode is None:
-                    await websocket.send_json({"type": "stderr", "data": "A process is already running. You can send input or interrupt it (Kill).\n"})
+                    await safe_send({"type": "stderr", "data": "A process is already running. You can send input or interrupt it (Kill).\n"})
                     continue
 
                 # Automatically adapt package manager commands (e.g. apt -> pacman)
@@ -559,14 +611,14 @@ async def terminal_websocket(websocket: WebSocket):
                 command = resolve_command_binary(command)
                 command = wrap_sudo_stdin(command)
                 if command != raw_command:
-                    await websocket.send_json({
+                    await safe_send({
                         "type": "stdout",
                         "data": f"\x1b[33m[Adaptador de Sistema]\x1b[0m Comando adaptado para {detect_pkg_manager()} ({detect_distro_family()}):\n  \x1b[32m{command}\x1b[0m\n\n"
                     })
 
                 cwd = msg.get("cwd") or str(get_tools_dir())
 
-                await websocket.send_json({
+                await safe_send({
                     "type": "start",
                     "command": command,
                     "cwd": cwd,
@@ -641,7 +693,7 @@ async def terminal_websocket(websocket: WebSocket):
                                 if chunk is None:
                                     break
                                 text = chunk.decode("utf-8", errors="replace")
-                                await websocket.send_json({"type": "stdout", "data": text})
+                                await safe_send({"type": "stdout", "data": text})
                         except Exception:
                             pass
 
@@ -663,7 +715,7 @@ async def terminal_websocket(websocket: WebSocket):
 
                     if returncode == 127:
                         setup_cmd = get_system_setup_command()
-                        await websocket.send_json({
+                        await safe_send({
                             "type": "stderr",
                             "data": (
                                 f"\n\x1b[33m[Diagnóstico Forense]\x1b[0m Comando no encontrado (Exit 127).\n"
@@ -673,7 +725,7 @@ async def terminal_websocket(websocket: WebSocket):
                             )
                         })
 
-                    await websocket.send_json({
+                    await safe_send({
                         "type": "exit",
                         "code": returncode,
                         "command": command
@@ -687,11 +739,11 @@ async def terminal_websocket(websocket: WebSocket):
                         except Exception:
                             pass
                         current_master_fd = None
-                    await websocket.send_json({
+                    await safe_send({
                         "type": "stderr",
                         "data": f"Execution error: {exc}\n"
                     })
-                    await websocket.send_json({"type": "exit", "code": 1})
+                    await safe_send({"type": "exit", "code": 1})
 
             elif action == "kill":
                 if current_proc and current_proc.returncode is None:
@@ -700,11 +752,11 @@ async def terminal_websocket(websocket: WebSocket):
                         await asyncio.sleep(0.5)
                         if current_proc.returncode is None:
                             current_proc.kill()
-                        await websocket.send_json({"type": "stderr", "data": "\n\x1b[31m[Proceso Interrumpido por el usuario]\x1b[0m\n"})
+                        await safe_send({"type": "stderr", "data": "\n\x1b[31m[Proceso Interrumpido por el usuario]\x1b[0m\n"})
                     except Exception as e:
-                        await websocket.send_json({"type": "stderr", "data": f"\nFailed to terminate: {e}\n"})
+                        await safe_send({"type": "stderr", "data": f"\nFailed to terminate: {e}\n"})
                 else:
-                    await websocket.send_json({"type": "stderr", "data": "No active process to terminate.\n"})
+                    await safe_send({"type": "stderr", "data": "No active process to terminate.\n"})
 
             elif action == "input":
                 data = msg.get("data", "")
@@ -712,9 +764,9 @@ async def terminal_websocket(websocket: WebSocket):
                     try:
                         os.write(current_master_fd, data.encode())
                     except Exception as e:
-                        await websocket.send_json({"type": "stderr", "data": f"\nInput error: {e}\n"})
+                        await safe_send({"type": "stderr", "data": f"\nInput error: {e}\n"})
                 else:
-                    await websocket.send_json({"type": "stderr", "data": "\nNo active process listening for input.\n"})
+                    await safe_send({"type": "stderr", "data": "\nNo active process listening for input.\n"})
 
     except WebSocketDisconnect:
         if current_master_fd is not None:
