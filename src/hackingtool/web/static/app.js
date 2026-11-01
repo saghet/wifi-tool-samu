@@ -792,7 +792,11 @@ function handleTerminalSubmit(e) {
   if (state.isRunningCommand) {
     // Send input directly to stdin of running process
     sendProcessInput(text + '\n');
-    appendTerminalOutput(`\x1b[33m${text}\x1b[0m\n`);
+    if (input.type === 'password') {
+      appendTerminalOutput(`\x1b[33m[contraseña enviada]\x1b[0m\n`);
+    } else {
+      appendTerminalOutput(`\x1b[33m${text}\x1b[0m\n`);
+    }
   } else {
     runCommand(text.trim());
   }

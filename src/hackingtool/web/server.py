@@ -38,6 +38,7 @@ from hackingtool.web.package_adapter import (
     check_host_dependencies,
     check_wireshark_status,
     get_system_setup_command,
+    wrap_sudo_stdin,
 )
 
 app = FastAPI(
@@ -556,6 +557,7 @@ async def terminal_websocket(websocket: WebSocket):
                 # Automatically adapt package manager commands (e.g. apt -> pacman)
                 command = adapt_install_command(raw_command)
                 command = resolve_command_binary(command)
+                command = wrap_sudo_stdin(command)
                 if command != raw_command:
                     await websocket.send_json({
                         "type": "stdout",
@@ -574,6 +576,8 @@ async def terminal_websocket(websocket: WebSocket):
                 try:
                     import pty
                     import errno
+                    import fcntl
+                    import termios
 
                     # Enriched environment with PATH including venv and local binaries
                     env = os.environ.copy()
@@ -608,6 +612,15 @@ async def terminal_websocket(websocket: WebSocket):
 
                     loop.add_reader(master_fd, pty_read_callback)
 
+                    def _make_preexec(slave):
+                        def _preexec():
+                            try:
+                                os.setsid()
+                                fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+                            except Exception:
+                                pass
+                        return _preexec
+
                     current_proc = await asyncio.create_subprocess_shell(
                         command,
                         stdin=slave_fd,
@@ -616,6 +629,7 @@ async def terminal_websocket(websocket: WebSocket):
                         cwd=cwd,
                         executable="/bin/bash",
                         env=env,
+                        preexec_fn=_make_preexec(slave_fd),
                         close_fds=True,
                     )
                     os.close(slave_fd)

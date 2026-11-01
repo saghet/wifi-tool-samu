@@ -465,6 +465,13 @@ def _adapt_single_step(cmd: str, mgr: str, family: str) -> str:
     return step
 
 
+def wrap_sudo_stdin(cmd: str) -> str:
+    """Ensure any sudo command reads password from stdin and emits prompt reliably."""
+    if "sudo " in cmd and "sudo -S" not in cmd:
+        return re.sub(r"\bsudo\s+", 'sudo -S -p "[sudo] password for %u: " ', cmd)
+    return cmd
+
+
 def adapt_install_command(full_cmd: str, pkg_manager: Optional[str] = None) -> str:
     """Translate an installation command line (potentially chained with && or ;)
     to the host's operating system package manager, guaranteeing cross-compatibility
@@ -478,21 +485,23 @@ def adapt_install_command(full_cmd: str, pkg_manager: Optional[str] = None) -> s
 
     # Special unified intercept for Anonymously Surf to prevent any broken sub-step
     if "kali-anonsurf" in full_cmd or "anonsurf-arch" in full_cmd:
-        return _adapt_single_step("kali-anonsurf", mgr, family)
+        res = _adapt_single_step("kali-anonsurf", mgr, family)
+        return wrap_sudo_stdin(res)
 
     # Split chained commands by '&&'
     if "&&" in full_cmd:
         parts = full_cmd.split("&&")
         adapted_parts = [_adapt_single_step(p, mgr, family) for p in parts]
-        return " && ".join(filter(None, adapted_parts))
+        return wrap_sudo_stdin(" && ".join(filter(None, adapted_parts)))
 
     # Split chained commands by ';'
     if ";" in full_cmd:
         parts = full_cmd.split(";")
         adapted_parts = [_adapt_single_step(p, mgr, family) for p in parts]
-        return " ; ".join(filter(None, adapted_parts))
+        return wrap_sudo_stdin(" ; ".join(filter(None, adapted_parts)))
 
-    return _adapt_single_step(full_cmd, mgr, family)
+    res = _adapt_single_step(full_cmd, mgr, family)
+    return wrap_sudo_stdin(res)
 
 
 # ── System Dependencies Check & Setup Helper ──────────────────────────────────

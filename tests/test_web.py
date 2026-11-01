@@ -116,7 +116,8 @@ def test_package_adapter_anonsurf_atomic():
     cmd = "git clone https://github.com/Und3rf10w/kali-anonsurf.git && cd kali-anonsurf && sudo ./installer.sh"
     adapted = adapt_install_command(cmd, pkg_manager="pacman")
     assert "anonsurf-arch" in adapted
-    assert "sudo pacman -S --needed --noconfirm" in adapted
+    assert "pacman -S --needed --noconfirm" in adapted
+    assert "sudo -S" in adapted
 
 
 def test_api_system_wireshark():
