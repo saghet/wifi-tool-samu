@@ -50,7 +50,6 @@ function switchTab(tabName) {
   const target = document.getElementById(`tab-${tabName}`);
   if (target) target.classList.remove('hidden');
 
-  // Update active navbar button styling
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.remove('bg-purple-600/20', 'text-purple-400', 'border', 'border-purple-500/30');
     btn.classList.add('text-gray-400');
@@ -62,7 +61,6 @@ function switchTab(tabName) {
     activeBtn.classList.add('bg-purple-600/20', 'text-purple-400', 'border', 'border-purple-500/30');
   }
 
-  // Auto focus input on search or terminal tab
   if (tabName === 'catalog') {
     setTimeout(() => document.getElementById('catalog-search')?.focus(), 50);
   } else if (tabName === 'terminal') {
@@ -82,7 +80,7 @@ async function loadSystemInfo() {
     document.getElementById('stat-total-tools').textContent = state.system.total_tools;
     document.getElementById('stat-installed-tools').textContent = state.system.installed_tools;
     document.getElementById('stat-categories').textContent = state.system.total_categories;
-    document.getElementById('stat-host-os').textContent = `${state.system.os_name} (${state.system.os_machine})`;
+    document.getElementById('stat-host-os').textContent = `${state.system.os_name} (${state.system.pkg_manager || state.system.os_machine})`;
     document.getElementById('stat-python-ver').textContent = `Python ${state.system.python_version}`;
 
     document.getElementById('dash-hero-tools').textContent = state.system.total_tools;
@@ -103,7 +101,6 @@ async function loadCategories() {
     if (!res.ok) return;
     state.categories = await res.json();
 
-    // Render Dashboard Category Cards
     const dashGrid = document.getElementById('dash-categories-grid');
     dashGrid.innerHTML = '';
     state.categories.slice(0, 9).forEach(cat => {
@@ -128,12 +125,12 @@ async function loadCategories() {
       dashGrid.appendChild(card);
     });
 
-    // Render Filter Pills in Catalog
     const pillsContainer = document.getElementById('category-pills');
+    pillsContainer.querySelectorAll('.cat-pill-dynamic').forEach(el => el.remove());
     state.categories.forEach(cat => {
       const btn = document.createElement('button');
       btn.id = `cat-pill-${cat.id}`;
-      btn.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-[#0B0E14] border border-[#262D3D] text-gray-300 hover:text-white hover:border-gray-500 transition whitespace-nowrap';
+      btn.className = 'cat-pill cat-pill-dynamic px-3 py-1 rounded-lg text-xs font-medium bg-[#0B0E14] border border-[#262D3D] text-gray-300 hover:text-white hover:border-gray-500 transition whitespace-nowrap';
       btn.textContent = `${cat.icon || ''} ${cat.menu_label || cat.title} (${cat.total_tools})`;
       btn.onclick = () => filterCategory(cat.id);
       pillsContainer.appendChild(btn);
@@ -153,7 +150,6 @@ async function loadTags() {
 
     const tagPills = document.getElementById('tag-pills');
     tagPills.innerHTML = '';
-    // Show top tags with highest counts
     state.tags.filter(t => t.count > 0).sort((a, b) => b.count - a.count).slice(0, 16).forEach(t => {
       const pill = document.createElement('button');
       pill.className = 'text-[11px] px-2.5 py-0.5 rounded-full bg-[#1A202C] border border-[#262D3D] text-gray-400 hover:text-purple-300 hover:border-purple-500/50 transition';
@@ -174,7 +170,7 @@ async function loadTools() {
     if (!res.ok) return;
     state.tools = await res.json();
     document.getElementById('nav-tools-badge').textContent = state.tools.length;
-    renderToolsList(state.tools);
+    applyFilters();
   } catch (err) {
     console.error('Failed to load tools:', err);
   }
@@ -206,12 +202,14 @@ function renderToolsList(toolsToRender) {
     const isInst = tool.is_installed;
     const statusBadge = isInst 
       ? `<span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 text-[10px] font-mono border border-green-500/20"><i class="fa-solid fa-check text-[9px]"></i><span>Instalada</span></span>`
-      : `<span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-400 text-[10px] font-mono border border-gray-500/20"><span>Disponible</span></span>`;
+      : `<span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-400 text-[10px] font-mono border border-gray-500/20"><span>No instalada</span></span>`;
 
     const usageCount = tool.usage ? tool.usage.length : 0;
     const usageBadge = usageCount > 0 
       ? `<span class="text-[10px] text-yellow-400/90 font-mono ml-2"><i class="fa-solid fa-bolt mr-1"></i>${usageCount} comandos</span>` 
       : '';
+
+    const hasInstallCmds = tool.install_commands && tool.install_commands.length > 0;
 
     card.innerHTML = `
       <div class="space-y-2">
@@ -240,24 +238,17 @@ function renderToolsList(toolsToRender) {
         </button>
 
         <div class="flex items-center space-x-1.5">
-          ${tool.install_commands && tool.install_commands.length > 0 && !tool.is_installed ? `
-            <button onclick="runCommand('${tool.install_commands[0].replace(/'/g, "\\'")}')" title="Instalar herramienta" class="px-2.5 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 text-xs font-mono transition flex items-center space-x-1">
+          ${hasInstallCmds && !isInst ? `
+            <button onclick="runInstallTool('${tool.id}')" title="Instalar herramienta con el gestor del sistema" class="px-2.5 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 text-xs font-mono transition flex items-center space-x-1">
               <i class="fa-solid fa-download text-[10px]"></i>
               <span class="hidden sm:inline">Instalar</span>
             </button>
           ` : ''}
 
-          ${tool.run_commands && tool.run_commands.length > 0 ? `
-            <button onclick="runCommand('${tool.run_commands[0].replace(/'/g, "\\'")}')" title="Ejecutar herramienta" class="px-2.5 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-500/30 text-xs font-mono transition flex items-center space-x-1">
-              <i class="fa-solid fa-play text-[10px]"></i>
-              <span class="hidden sm:inline">Ejecutar</span>
-            </button>
-          ` : (tool.usage && tool.usage.length > 0 ? `
-            <button onclick="runCommand('${tool.usage[0].command.replace(/'/g, "\\'")}')" title="Ejecutar primer comando común" class="px-2.5 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-500/30 text-xs font-mono transition flex items-center space-x-1">
-              <i class="fa-solid fa-terminal text-[10px]"></i>
-              <span class="hidden sm:inline">Lanzar</span>
-            </button>
-          ` : '')}
+          <button onclick="runToolCommand('${tool.id}')" title="${isInst ? 'Ejecutar comando' : 'Herramienta no instalada'}" class="px-2.5 py-1.5 rounded-lg ${isInst ? 'bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-500/30' : 'bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 border border-gray-500/30'} text-xs font-mono transition flex items-center space-x-1">
+            <i class="fa-solid fa-play text-[10px]"></i>
+            <span class="hidden sm:inline">Ejecutar</span>
+          </button>
         </div>
       </div>
     `;
@@ -308,11 +299,7 @@ function filterCategory(catId) {
 }
 
 function filterTag(tag) {
-  if (state.activeTag === tag) {
-    state.activeTag = null; // Toggle off
-  } else {
-    state.activeTag = tag;
-  }
+  state.activeTag = (state.activeTag === tag) ? null : tag;
   applyFilters();
 }
 
@@ -357,6 +344,56 @@ function applyFilters() {
   renderToolsList(filtered);
 }
 
+// ── Smart Install & Run Handlers ───────────────────────────────────────────────
+
+function runInstallTool(toolId) {
+  const tool = state.tools.find(t => t.id === toolId);
+  if (!tool) return;
+
+  let cmds = tool.install_commands || [];
+  if (cmds.length === 0) {
+    alert(`No hay comandos de instalación definidos para ${tool.title}.`);
+    return;
+  }
+
+  const fullInstallCmd = cmds.join(' && ');
+  switchTab('terminal');
+  runCommand(fullInstallCmd);
+}
+
+function runToolCommand(toolId) {
+  const tool = state.tools.find(t => t.id === toolId);
+  if (!tool) return;
+
+  // Resolve best command to run
+  let cmd = '';
+  if (tool.run_commands && tool.run_commands.length > 0) {
+    cmd = tool.run_commands[0];
+  } else if (tool.usage && tool.usage.length > 0) {
+    cmd = tool.usage[0].command;
+  }
+
+  if (!tool.is_installed) {
+    const wantInstall = confirm(
+      `⚠️ La herramienta '${tool.title}' no está instalada en tu sistema aún.\n\n` +
+      `¿Deseas ejecutar su instalación ahora?\n` +
+      `(Si eliges 'Cancelar', se intentará ejecutar el comando de todos modos).`
+    );
+    if (wantInstall) {
+      runInstallTool(toolId);
+      return;
+    }
+  }
+
+  if (!cmd) {
+    openToolModal(toolId);
+    return;
+  }
+
+  switchTab('terminal');
+  runCommand(cmd);
+}
+
 // ── Tool Modal ─────────────────────────────────────────────────────────────────
 
 function openToolModal(toolId) {
@@ -368,7 +405,6 @@ function openToolModal(toolId) {
   document.getElementById('modal-tool-category').textContent = tool.category_title;
   document.getElementById('modal-tool-desc').textContent = tool.description || 'Sin descripción detallada disponible.';
 
-  // Status badge
   const statusEl = document.getElementById('modal-tool-status');
   if (tool.is_installed) {
     statusEl.className = 'text-[10px] px-2 py-0.5 rounded-full font-mono bg-green-500/10 text-green-400 border border-green-500/20';
@@ -378,7 +414,6 @@ function openToolModal(toolId) {
     statusEl.textContent = 'No instalada';
   }
 
-  // URL
   const urlBox = document.getElementById('modal-tool-url-box');
   const urlLink = document.getElementById('modal-tool-url');
   if (tool.project_url) {
@@ -389,7 +424,6 @@ function openToolModal(toolId) {
     urlBox.classList.add('hidden');
   }
 
-  // Tags
   const tagsBox = document.getElementById('modal-tool-tags');
   tagsBox.innerHTML = '';
   (tool.tags || []).forEach(tg => {
@@ -399,7 +433,6 @@ function openToolModal(toolId) {
     tagsBox.appendChild(sp);
   });
 
-  // Cheatsheet USAGE
   const usageBox = document.getElementById('modal-tool-usage-box');
   const usageList = document.getElementById('modal-tool-usage-list');
   usageList.innerHTML = '';
@@ -428,7 +461,6 @@ function openToolModal(toolId) {
     usageBox.classList.add('hidden');
   }
 
-  // Install Commands
   const installBox = document.getElementById('modal-tool-install-box');
   const installCmds = document.getElementById('modal-tool-install-cmds');
   installCmds.innerHTML = '';
@@ -444,7 +476,6 @@ function openToolModal(toolId) {
     installBox.classList.add('hidden');
   }
 
-  // Action buttons in modal footer
   const btnInstall = document.getElementById('modal-btn-install');
   if (tool.install_commands && tool.install_commands.length > 0) {
     btnInstall.classList.remove('hidden');
@@ -463,24 +494,17 @@ function closeToolModal() {
 }
 
 function executeCurrentToolInstall() {
-  if (!state.activeTool || !state.activeTool.install_commands) return;
-  const cmd = state.activeTool.install_commands.join(' && ');
+  if (!state.activeTool) return;
+  const toolId = state.activeTool.id;
   closeToolModal();
-  runCommand(cmd);
+  runInstallTool(toolId);
 }
 
 function executeCurrentToolRun() {
   if (!state.activeTool) return;
-  let cmd = '';
-  if (state.activeTool.run_commands && state.activeTool.run_commands.length > 0) {
-    cmd = state.activeTool.run_commands[0];
-  } else if (state.activeTool.usage && state.activeTool.usage.length > 0) {
-    cmd = state.activeTool.usage[0].command;
-  }
-  if (cmd) {
-    closeToolModal();
-    runCommand(cmd);
-  }
+  const toolId = state.activeTool.id;
+  closeToolModal();
+  runToolCommand(toolId);
 }
 
 // ── WebSocket & Terminal ───────────────────────────────────────────────────────
@@ -499,7 +523,7 @@ function initWebSocket() {
   state.ws.onclose = () => {
     state.wsConnected = false;
     updateWsStatus(false);
-    setTimeout(initWebSocket, 3000); // Reconnect after 3s
+    setTimeout(initWebSocket, 3000);
   };
 
   state.ws.onerror = (err) => {
@@ -532,30 +556,54 @@ function updateWsStatus(connected) {
   }
 }
 
-function handleWsMessage(msg) {
-  const outputEl = document.getElementById('terminal-output');
+function updateTerminalInputUI(running) {
+  state.isRunningCommand = running;
+  const input = document.getElementById('terminal-input');
+  const submitBtn = document.getElementById('term-submit-btn');
   const indicator = document.getElementById('term-active-indicator');
 
-  if (msg.type === 'start') {
-    state.isRunningCommand = true;
+  if (running) {
     indicator.textContent = 'EJECUTANDO...';
     indicator.className = 'text-[10px] text-yellow-400 font-mono animate-pulse';
+    if (input) input.placeholder = 'Proceso activo: escribe tu respuesta/contraseña y pulsa Enviar (o Interrumpir arriba)...';
+    if (submitBtn) {
+      submitBtn.textContent = 'Enviar Entrada';
+      submitBtn.className = 'px-4 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white rounded text-xs font-mono font-medium transition';
+    }
+  } else {
+    indicator.textContent = 'LISTO';
+    indicator.className = 'text-[10px] text-green-400 font-mono';
+    if (input) input.placeholder = 'Introduce comando bash (ej: nmap -sn 192.168.1.0/24)...';
+    if (submitBtn) {
+      submitBtn.textContent = 'Ejecutar';
+      submitBtn.className = 'px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-mono font-medium transition';
+    }
+  }
+}
+
+function handleWsMessage(msg) {
+  if (msg.type === 'start') {
+    updateTerminalInputUI(true);
     appendTerminalOutput(`\n\x1b[36m[START]\x1b[0m Ejecutando: \x1b[1;32m${msg.command}\x1b[0m en \x1b[33m${msg.cwd}\x1b[0m\n`);
   } else if (msg.type === 'stdout') {
     appendTerminalOutput(msg.data);
   } else if (msg.type === 'stderr') {
     appendTerminalOutput(msg.data);
   } else if (msg.type === 'exit') {
-    state.isRunningCommand = false;
-    indicator.textContent = 'LISTO';
-    indicator.className = 'text-[10px] text-green-400 font-mono';
+    updateTerminalInputUI(false);
     const codeColor = msg.code === 0 ? '\x1b[32m' : '\x1b[31m';
     appendTerminalOutput(`\n\x1b[36m[EXIT]\x1b[0m Proceso finalizado con código: ${codeColor}${msg.code}\x1b[0m\n──────────────────────────────────────────────────────────────────────────\n`);
+    // Refresh tools status in background if an install just completed
+    if (msg.command && (msg.command.includes('pacman') || msg.command.includes('apt') || msg.command.includes('clone'))) {
+      setTimeout(loadTools, 1500);
+      setTimeout(loadSystemInfo, 1500);
+    }
   }
 }
 
 function appendTerminalOutput(rawText) {
   const term = document.getElementById('terminal-output');
+  if (!term) return;
   const formattedHtml = ansiUp.ansi_to_html(rawText);
   const span = document.createElement('span');
   span.innerHTML = formattedHtml;
@@ -576,6 +624,14 @@ function runCommand(command, cwd = null) {
   }));
 }
 
+function sendProcessInput(data) {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  state.ws.send(JSON.stringify({
+    action: 'input',
+    data: data,
+  }));
+}
+
 function runPredefinedCommand(cmd) {
   runCommand(cmd);
 }
@@ -583,6 +639,7 @@ function runPredefinedCommand(cmd) {
 function killProcess() {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
   state.ws.send(JSON.stringify({ action: 'kill' }));
+  updateTerminalInputUI(false);
 }
 
 function clearTerminal() {
@@ -594,9 +651,16 @@ function clearTerminal() {
 function handleTerminalSubmit(e) {
   e.preventDefault();
   const input = document.getElementById('terminal-input');
-  const cmd = input.value.trim();
-  if (!cmd) return;
-  runCommand(cmd);
+  const text = input.value;
+  if (!text && !state.isRunningCommand) return;
+
+  if (state.isRunningCommand) {
+    // Send input directly to stdin of running process
+    sendProcessInput(text + '\n');
+    appendTerminalOutput(`\x1b[33m${text}\x1b[0m\n`);
+  } else {
+    runCommand(text.trim());
+  }
   input.value = '';
 }
 
@@ -782,7 +846,6 @@ function renderSelectedEngagement() {
   document.getElementById('eng-view-targets').textContent = (eng.targets || []).join(', ') || 'Ninguno especificado';
   document.getElementById('eng-view-scope').textContent = (eng.scope_in || []).join(', ') || 'Todo el target';
 
-  // Findings
   const findingsList = document.getElementById('eng-findings-list');
   document.getElementById('eng-findings-count').textContent = (eng.findings || []).length;
   findingsList.innerHTML = '';
@@ -804,7 +867,6 @@ function renderSelectedEngagement() {
     });
   }
 
-  // Report Markdown preview
   const reportEl = document.getElementById('eng-report-preview');
   if (eng.report) {
     reportEl.innerHTML = marked.parse(eng.report);
@@ -946,7 +1008,6 @@ async function testAiConnection() {
 
 function copyToClipboard(text) {
   navigator.clipboard.writeText(text).then(() => {
-    // Show toast
     const toast = document.createElement('div');
     toast.className = 'fixed bottom-5 right-5 bg-purple-600 text-white text-xs px-4 py-2 rounded-lg shadow-xl z-50 flex items-center space-x-2 transition animate-bounce';
     toast.innerHTML = `<i class="fa-solid fa-check"></i><span>Comando copiado al portapapeles</span>`;

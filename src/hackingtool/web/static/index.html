@@ -240,6 +240,12 @@
             <input type="checkbox" id="filter-installed-only" onchange="applyFilters()" class="rounded bg-[#151921] border-[#262D3D] text-purple-600 focus:ring-0">
             <span>Solo instaladas</span>
           </label>
+
+          <!-- Refresh Button -->
+          <button onclick="loadTools(); loadSystemInfo();" title="Recargar estado del sistema y herramientas" class="px-3.5 py-2.5 rounded-lg bg-[#0B0E14] border border-[#262D3D] hover:border-purple-500 text-gray-300 hover:text-white text-xs flex items-center space-x-1.5 transition">
+            <i class="fa-solid fa-arrows-rotate text-xs"></i>
+            <span class="hidden sm:inline">Refrescar</span>
+          </button>
         </div>
 
         <!-- Category Horizontal Pills -->
@@ -356,7 +362,7 @@
             autocomplete="off"
             spellcheck="false"
           >
-          <button type="submit" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-mono font-medium transition">
+          <button type="submit" id="term-submit-btn" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-mono font-medium transition">
             Ejecutar
           </button>
         </form>

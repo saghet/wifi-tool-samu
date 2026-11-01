@@ -30,6 +30,7 @@ import hackingtool.ai_command as ai_command
 import hackingtool.engagement as engagement_mod
 import hackingtool.findings as findings_mod
 from hackingtool.cli import all_tools, tool_definitions
+from hackingtool.web.package_adapter import adapt_install_command, detect_pkg_manager
 
 app = FastAPI(
     title="HackingTool Web Suite",
@@ -69,6 +70,28 @@ def serialize_tool(tool: Any, category_title: str, cat_index: int) -> dict[str, 
         if isinstance(opt, (list, tuple)) and len(opt) >= 1:
             options_list.append(opt[0])
 
+    raw_install_cmds = list(getattr(tool, "INSTALL_COMMANDS", []) or [])
+    system_pkgs = getattr(tool, "SYSTEM_PKGS", {}) or {}
+
+    # If no install commands exist but system_pkgs has apt/which, generate adapted install
+    if not raw_install_cmds and system_pkgs:
+        apt_pkg = system_pkgs.get("apt") or system_pkgs.get("which")
+        if apt_pkg:
+            raw_install_cmds = [f"sudo apt-get install -y {apt_pkg}"]
+
+    # Adapt all install commands to host OS package manager (e.g. pacman on Arch)
+    adapted_install_cmds = [adapt_install_command(cmd) for cmd in raw_install_cmds]
+
+    raw_run_cmds = list(getattr(tool, "RUN_COMMANDS", []) or [])
+    if not raw_run_cmds and usage_list:
+        raw_run_cmds = [usage_list[0]["command"]]
+
+    is_installed = bool(getattr(tool, "is_installed", False))
+    # Secondary check: if which binary exists in PATH
+    which_bin = system_pkgs.get("which")
+    if which_bin and shutil.which(which_bin):
+        is_installed = True
+
     return {
         "id": tool_id,
         "title": tool_title,
@@ -76,13 +99,13 @@ def serialize_tool(tool: Any, category_title: str, cat_index: int) -> dict[str, 
         "category_slug": cat_slug,
         "category_index": cat_index,
         "description": getattr(tool, "DESCRIPTION", "") or "",
-        "is_installed": bool(getattr(tool, "is_installed", False)),
+        "is_installed": is_installed,
         "kind": getattr(tool, "KIND", "install"),
         "tags": list(getattr(tool, "TAGS", []) or []),
         "project_url": getattr(tool, "PROJECT_URL", "") or "",
         "lab_safe_notes": getattr(tool, "LAB_SAFE_NOTES", "") or "",
-        "install_commands": list(getattr(tool, "INSTALL_COMMANDS", []) or []),
-        "run_commands": list(getattr(tool, "RUN_COMMANDS", []) or []),
+        "install_commands": adapted_install_cmds,
+        "run_commands": raw_run_cmds,
         "usage": usage_list,
         "options": options_list,
         "archived": bool(getattr(tool, "ARCHIVED", False)),
@@ -101,7 +124,6 @@ def get_catalog_data():
         cat_desc = getattr(cat, "DESCRIPTION", "") or ""
         cat_tools_raw = getattr(cat, "TOOLS", []) or []
 
-        # Find matching definition for icon and menu_label if available
         icon = "🛠"
         menu_label = cat_title
         for item in tool_definitions:
@@ -184,6 +206,7 @@ def get_system_info():
         "os_name": platform.system(),
         "os_release": platform.release(),
         "os_machine": platform.machine(),
+        "pkg_manager": detect_pkg_manager(),
         "python_version": platform.python_version(),
         "hackingtool_version": VERSION_DISPLAY,
         "total_categories": len(_cats),
@@ -457,7 +480,6 @@ def update_configuration(update: ConfigUpdateRequest):
     if update.ai_key is not None:
         env_file = USER_CONFIG_DIR / ".env"
         env_file.parent.mkdir(parents=True, exist_ok=True)
-        # Update or set HACKINGTOOL_AI_KEY
         lines = []
         if env_file.exists():
             lines = env_file.read_text(encoding="utf-8").splitlines()
@@ -495,15 +517,19 @@ async def terminal_websocket(websocket: WebSocket):
     current_proc: Optional[asyncio.subprocess.Process] = None
 
     async def read_stream(stream, stream_name: str):
-        while True:
-            line = await stream.readline()
-            if not line:
-                break
-            text = line.decode("utf-8", errors="replace")
-            try:
-                await websocket.send_json({"type": stream_name, "data": text})
-            except Exception:
-                break
+        try:
+            while True:
+                # Read chunks up to 2048 bytes for instant unbuffered response
+                chunk = await stream.read(2048)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                try:
+                    await websocket.send_json({"type": stream_name, "data": text})
+                except Exception:
+                    break
+        except Exception:
+            pass
 
     try:
         while True:
@@ -511,16 +537,32 @@ async def terminal_websocket(websocket: WebSocket):
             action = msg.get("action")
 
             if action == "run":
-                command = msg.get("command", "").strip()
-                if not command:
+                raw_command = msg.get("command", "").strip()
+                if not raw_command:
                     await websocket.send_json({"type": "stderr", "data": "Error: Empty command\n"})
                     continue
 
                 if current_proc and current_proc.returncode is None:
-                    await websocket.send_json({"type": "stderr", "data": "A command is already running. Kill it first.\n"})
+                    await websocket.send_json({"type": "stderr", "data": "A process is already running. You can send input or interrupt it (Kill).\n"})
                     continue
 
+                # Automatically adapt package manager commands (e.g. apt -> pacman)
+                command = adapt_install_command(raw_command)
+                if command != raw_command:
+                    await websocket.send_json({
+                        "type": "stdout",
+                        "data": f"\x1b[33m[Adaptador de Sistema]\x1b[0m Comando adaptado para {detect_pkg_manager()}:\n  \x1b[32m{command}\x1b[0m\n\n"
+                    })
+
                 cwd = msg.get("cwd") or str(get_tools_dir())
+
+                # If command expects a subfolder in tools_dir (e.g. git repo), cd into it if exists
+                match_clone = re.search(r"git clone\s+(?:https?://[^\s]+/)?([\w\-]+)(?:\.git)?", command)
+                if match_clone:
+                    repo_folder = match_clone.group(1)
+                else:
+                    repo_folder = None
+
                 await websocket.send_json({
                     "type": "start",
                     "command": command,
@@ -529,12 +571,22 @@ async def terminal_websocket(websocket: WebSocket):
                 })
 
                 try:
+                    # Enriched environment with PATH including venv and local binaries
+                    env = os.environ.copy()
+                    venv_bin = str(PROJECT_ROOT / ".venv" / "bin")
+                    user_bin = str(Path.home() / ".local" / "bin")
+                    env["PATH"] = f"{venv_bin}:{user_bin}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:{env.get('PATH', '')}"
+                    env["PYTHONUNBUFFERED"] = "1"
+                    env["TERM"] = "xterm-256color"
+
                     current_proc = await asyncio.create_subprocess_shell(
                         command,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
                         stdin=asyncio.subprocess.PIPE,
                         cwd=cwd,
+                        executable="/bin/bash",
+                        env=env,
                     )
 
                     stdout_task = asyncio.create_task(read_stream(current_proc.stdout, "stdout"))
@@ -562,7 +614,7 @@ async def terminal_websocket(websocket: WebSocket):
                         await asyncio.sleep(0.5)
                         if current_proc.returncode is None:
                             current_proc.kill()
-                        await websocket.send_json({"type": "stderr", "data": "\n[Process Terminated by user]\n"})
+                        await websocket.send_json({"type": "stderr", "data": "\n\x1b[31m[Proceso Interrumpido por el usuario]\x1b[0m\n"})
                     except Exception as e:
                         await websocket.send_json({"type": "stderr", "data": f"\nFailed to terminate: {e}\n"})
                 else:
@@ -574,8 +626,12 @@ async def terminal_websocket(websocket: WebSocket):
                     try:
                         current_proc.stdin.write(data.encode())
                         await current_proc.stdin.drain()
-                    except Exception:
-                        pass
+                        # Echo input back to terminal window
+                        await websocket.send_json({"type": "stdout", "data": data})
+                    except Exception as e:
+                        await websocket.send_json({"type": "stderr", "data": f"\nInput error: {e}\n"})
+                else:
+                    await websocket.send_json({"type": "stderr", "data": "\nNo active process listening for input.\n"})
 
     except WebSocketDisconnect:
         if current_proc and current_proc.returncode is None:

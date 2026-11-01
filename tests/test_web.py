@@ -66,3 +66,10 @@ def test_api_config():
     cfg = response.json()
     assert "tools_dir" in cfg
     assert "ai_provider" in cfg
+
+
+def test_package_adapter_arch():
+    from hackingtool.web.package_adapter import adapt_install_command
+    arch_cmd = adapt_install_command("sudo apt-get install -y proxychains4", pkg_manager="pacman")
+    assert "pacman -S" in arch_cmd
+    assert "proxychains-ng" in arch_cmd

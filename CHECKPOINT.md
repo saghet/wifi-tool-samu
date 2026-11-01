@@ -71,3 +71,29 @@ El acceso directo estándar (.desktop) para KDE Plasma 6 ya quedó instalado en 
 
 Confirma que lees el CHECKPOINT.md y dime qué siguiente tarea deseas que realicemos.
 ```
+
+---
+
+## 4. Corrección Fullstack: Adaptador de Gestor de Paquetes y Terminal Interactiva (2026-11-01)
+
+### Diagnóstico de Fallo:
+1. **Incompatibilidad de distribución en comandos de instalación**:
+   - El catálogo original contenía comandos codificados para Debian/Ubuntu (`sudo apt-get install -y <pkg>`).
+   - En Arch Linux / CachyOS (`pacman`), estos comandos arrojaban `apt-get: command not found`.
+2. **Ejecución de herramientas no instaladas**:
+   - Al pulsar "Ejecutar" en herramientas ausentes del sistema (como `proxychains-ng`), la terminal arrojaba `command not found: code 127`.
+   - El botón de instalación de las tarjetas solo tomaba el primer elemento de la lista en lugar de encadenar todos los pasos.
+3. **Bloqueo en buffers de subprocesos / Sudo interactivo**:
+   - `stream.readline()` bloqueaba prompts interactivos sin salto de línea (`[sudo] password:` o `[y/N]`).
+   - `handleTerminalSubmit` no enviaba entradas interactivas a procesos en ejecución.
+
+### Soluciones Implementadas:
+- **`package_adapter.py`**: Traductor multiplataforma que mapea automáticamente paquetes de Debian/Ubuntu a `pacman` (`sudo pacman -S --noconfirm --needed <pkg>`) con tabla de equivalencias (`proxychains4` -> `proxychains-ng`, `wireshark` -> `wireshark-qt`, etc.).
+- **Backend `server.py`**:
+  - Lectura de streams por chunks (`read(2048)`) sin buffering para prompts interactivos inmediatos.
+  - Shell configurada con `/bin/bash` y `PATH` enriquecido (`.venv/bin`, `~/.local/bin`, `/usr/bin`).
+  - Adaptación automática en tiempo real de comandos enviados vía WebSocket.
+- **Frontend `app.js` & `index.html`**:
+  - Encadenamiento completo de comandos de instalación (`cmds.join(' && ')`).
+  - Verificación inteligente al hacer clic en "Ejecutar": si la herramienta no está instalada, pregunta al usuario y ofrece instalarla de inmediato con 1 clic.
+  - Soporte de entrada interactiva para responder prompts y contraseñas de `sudo` en el input de la terminal.
