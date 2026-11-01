@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HackingTool — Web Suite & Control Center</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              purple: '#7B61FF',
+              dark: '#0B0E14',
+              surface: '#151921',
+              card: '#1B202C',
+              border: '#262D3D',
+              cyan: '#06B6D4',
+              green: '#10B981',
+              red: '#EF4444',
+              yellow: '#F59E0B'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- AnsiUp for Colored Terminal Output -->
+  <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.1.0/ansi_up.min.js"></script>
+  <!-- Marked for Markdown Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-[#0B0E14] text-gray-200 min-h-screen flex flex-col selection:bg-purple-600 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-40 bg-[#121620]/95 backdrop-blur border-b border-[#262D3D]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('dashboard')">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+          <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="font-bold text-lg tracking-wider text-white">HACKING<span class="text-purple-400">TOOL</span></span>
+            <span id="header-version" class="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 font-mono">v3.0.0</span>
+          </div>
+          <p class="text-[11px] text-gray-400 hidden sm:block">Centro de Control Web & Orquestador de Seguridad</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="hidden md:flex space-x-1 font-medium text-sm">
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="tab-btn px-3 py-2 rounded-lg text-white bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center space-x-2 transition">
+          <i class="fa-solid fa-chart-pie text-xs"></i>
+          <span>Dashboard</span>
+        </button>
+        <button onclick="switchTab('catalog')" id="nav-catalog" class="tab-btn px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 flex items-center space-x-2 transition">
+          <i class="fa-solid fa-toolbox text-xs"></i>
+          <span>Herramientas</span>
+          <span id="nav-tools-badge" class="ml-1 text-[10px] px-1.5 py-0.2 bg-[#262D3D] rounded-full text-gray-300">...</span>
+        </button>
+        <button onclick="switchTab('terminal')" id="nav-terminal" class="tab-btn px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 flex items-center space-x-2 transition">
+          <i class="fa-solid fa-terminal text-xs"></i>
+          <span>Terminal en Vivo</span>
+        </button>
+        <button onclick="switchTab('ai')" id="nav-ai" class="tab-btn px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 flex items-center space-x-2 transition">
+          <i class="fa-solid fa-wand-magic-sparkles text-xs text-purple-400"></i>
+          <span>Asistente IA</span>
+        </button>
+        <button onclick="switchTab('engagements')" id="nav-engagements" class="tab-btn px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 flex items-center space-x-2 transition">
+          <i class="fa-solid fa-folder-tree text-xs"></i>
+          <span>Auditorías</span>
+        </button>
+        <button onclick="switchTab('config')" id="nav-config" class="tab-btn px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 flex items-center space-x-2 transition">
+          <i class="fa-solid fa-gear text-xs"></i>
+          <span>Ajustes</span>
+        </button>
+      </nav>
+
+      <!-- Terminal Status Pill & Quick Action -->
+      <div class="flex items-center space-x-3">
+        <div id="ws-status-badge" class="flex items-center space-x-1.5 text-xs px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-mono">
+          <span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+          <span id="ws-status-text">Desconectado</span>
+        </div>
+        <button onclick="switchTab('terminal')" class="hidden sm:flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-lg bg-[#262D3D] hover:bg-[#343D52] text-gray-200 transition">
+          <i class="fa-solid fa-bolt text-yellow-400"></i>
+          <span>Consola</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Mobile Tab Bar -->
+  <div class="md:hidden flex overflow-x-auto py-2 px-4 bg-[#121620] border-b border-[#262D3D] space-x-2 text-xs">
+    <button onclick="switchTab('dashboard')" class="px-3 py-1.5 rounded-md bg-[#262D3D] whitespace-nowrap">Dashboard</button>
+    <button onclick="switchTab('catalog')" class="px-3 py-1.5 rounded-md bg-[#262D3D] whitespace-nowrap">Herramientas</button>
+    <button onclick="switchTab('terminal')" class="px-3 py-1.5 rounded-md bg-[#262D3D] whitespace-nowrap">Terminal</button>
+    <button onclick="switchTab('ai')" class="px-3 py-1.5 rounded-md bg-[#262D3D] whitespace-nowrap">IA</button>
+    <button onclick="switchTab('engagements')" class="px-3 py-1.5 rounded-md bg-[#262D3D] whitespace-nowrap">Auditorías</button>
+    <button onclick="switchTab('config')" class="px-3 py-1.5 rounded-md bg-[#262D3D] whitespace-nowrap">Ajustes</button>
+  </div>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+    <!-- TAB 1: DASHBOARD -->
+    <section id="tab-dashboard" class="tab-content space-y-8">
+      
+      <!-- Welcome Hero Banner -->
+      <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-purple-900/30 via-[#151921] to-[#121620] border border-[#262D3D] p-6 sm:p-8">
+        <div class="relative z-10 max-w-3xl">
+          <span class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-medium mb-4">
+            <i class="fa-solid fa-lock-open text-xs"></i>
+            <span>Authorized Security Testing Framework</span>
+          </span>
+          <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
+            Suite Integral de Ciberseguridad & Pentesting
+          </h1>
+          <p class="mt-3 text-gray-300 text-sm sm:text-base leading-relaxed">
+            Más de <span id="dash-hero-tools" class="text-purple-400 font-bold">260</span> herramientas en <span id="dash-hero-cats" class="text-purple-400 font-bold">21</span> categorías. Reconocimiento, explotación, auditorías web, análisis forense, cracking y OSINT con capa de asistencia por IA y ejecución en tiempo real.
+          </p>
+          <div class="mt-6 flex flex-wrap gap-3">
+            <button onclick="switchTab('catalog')" class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm flex items-center space-x-2 shadow-lg shadow-purple-600/30 transition">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <span>Explorar Herramientas</span>
+            </button>
+            <button onclick="switchTab('ai')" class="px-5 py-2.5 rounded-xl bg-[#262D3D] hover:bg-[#343D52] text-gray-200 font-medium text-sm flex items-center space-x-2 transition">
+              <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
+              <span>Consultar con Asistente IA</span>
+            </button>
+            <button onclick="switchTab('terminal')" class="px-5 py-2.5 rounded-xl bg-[#1A202C] hover:bg-[#252D3E] text-gray-200 font-mono text-sm flex items-center space-x-2 border border-[#2D3748] transition">
+              <i class="fa-solid fa-terminal text-green-400"></i>
+              <span>Abrir Consola</span>
+            </button>
+          </div>
+        </div>
+        <!-- Decorative Background Glow -->
+        <div class="absolute -right-10 -bottom-10 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+      </div>
+
+      <!-- Quick Metrics Stats Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div class="bg-[#151921] border border-[#262D3D] rounded-xl p-5 hover:border-purple-500/50 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-gray-400">Total Herramientas</span>
+            <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+              <i class="fa-solid fa-toolbox text-sm"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-2xl font-bold text-white" id="stat-total-tools">--</div>
+          <span class="text-[11px] text-gray-400">En catálogo YAML y Python</span>
+        </div>
+
+        <div class="bg-[#151921] border border-[#262D3D] rounded-xl p-5 hover:border-green-500/50 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-gray-400">Instaladas en Sistema</span>
+            <div class="w-8 h-8 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center">
+              <i class="fa-solid fa-check-circle text-sm"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-2xl font-bold text-green-400" id="stat-installed-tools">--</div>
+          <span class="text-[11px] text-gray-400" id="stat-installed-pct">Listas para usar</span>
+        </div>
+
+        <div class="bg-[#151921] border border-[#262D3D] rounded-xl p-5 hover:border-blue-500/50 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-gray-400">Categorías de Ataque</span>
+            <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+              <i class="fa-solid fa-layer-group text-sm"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-2xl font-bold text-white" id="stat-categories">--</div>
+          <span class="text-[11px] text-gray-400">Recon, Web, Wifi, OSINT...</span>
+        </div>
+
+        <div class="bg-[#151921] border border-[#262D3D] rounded-xl p-5 hover:border-yellow-500/50 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-gray-400">Sistema Host</span>
+            <div class="w-8 h-8 rounded-lg bg-yellow-500/10 text-yellow-400 flex items-center justify-center">
+              <i class="fa-brands fa-linux text-sm"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-lg font-bold text-white font-mono truncate" id="stat-host-os">Linux</div>
+          <span class="text-[11px] text-gray-400 font-mono truncate block" id="stat-python-ver">Python</span>
+        </div>
+
+      </div>
+
+      <!-- Categories Highlights Carousel / Grid -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white">Categorías Principales</h2>
+            <p class="text-xs text-gray-400">Selecciona un área para saltar al catálogo de herramientas</p>
+          </div>
+          <button onclick="switchTab('catalog')" class="text-xs text-purple-400 hover:text-purple-300 font-medium">Ver todas →</button>
+        </div>
+        <div id="dash-categories-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Populated dynamically via app.js -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 2: TOOL CATALOG -->
+    <section id="tab-catalog" class="tab-content hidden space-y-6">
+      
+      <!-- Search & Filter Controls -->
+      <div class="bg-[#151921] border border-[#262D3D] rounded-xl p-4 sm:p-5 space-y-4">
+        
+        <div class="flex flex-col sm:flex-row gap-3">
+          <!-- Live Search Input -->
+          <div class="relative flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-gray-400 text-sm"></i>
+            <input 
+              type="text" 
+              id="catalog-search" 
+              placeholder="Buscar herramienta por nombre, descripción, tag o comando..." 
+              class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#0B0E14] border border-[#262D3D] focus:border-purple-500 focus:outline-none text-white text-sm placeholder-gray-500 transition"
+              oninput="handleSearchInput()"
+            >
+            <button id="search-clear-btn" onclick="clearSearch()" class="hidden absolute right-3 top-3 text-gray-400 hover:text-white">
+              <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+          </div>
+
+          <!-- Installed Only Toggle -->
+          <label class="inline-flex items-center space-x-2 text-xs text-gray-300 bg-[#0B0E14] border border-[#262D3D] px-4 py-2.5 rounded-lg cursor-pointer hover:border-gray-500 select-none">
+            <input type="checkbox" id="filter-installed-only" onchange="applyFilters()" class="rounded bg-[#151921] border-[#262D3D] text-purple-600 focus:ring-0">
+            <span>Solo instaladas</span>
+          </label>
+        </div>
+
+        <!-- Category Horizontal Pills -->
+        <div>
+          <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Filtrar por Categoría:</div>
+          <div id="category-pills" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
+            <button onclick="filterCategory(null)" id="cat-pill-all" class="cat-pill active px-3 py-1 rounded-lg text-xs font-medium bg-purple-600 text-white transition">
+              Todas
+            </button>
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Popular Tags Pills -->
+        <div>
+          <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Tags frecuentes:</div>
+          <div id="tag-pills" class="flex flex-wrap gap-1.5">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Catalog Results Counter & Actions -->
+      <div class="flex items-center justify-between text-xs text-gray-400 px-1">
+        <div>Mostrando <span id="tools-count-badge" class="font-bold text-white">0</span> herramientas encontradas</div>
+        <div class="flex items-center space-x-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-green-400"></span>
+          <span>= Lista en PATH / Instalada</span>
+        </div>
+      </div>
+
+      <!-- Tools Grid -->
+      <div id="tools-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <!-- Empty state when no tools match -->
+      <div id="tools-empty" class="hidden text-center py-16 bg-[#151921] border border-[#262D3D] rounded-2xl">
+        <i class="fa-solid fa-box-open text-4xl text-gray-500 mb-3"></i>
+        <h3 class="text-base font-bold text-white">No se encontraron herramientas</h3>
+        <p class="text-xs text-gray-400 mt-1">Prueba cambiando los términos de búsqueda o limpiando los filtros seleccionados.</p>
+        <button onclick="resetFilters()" class="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded-lg transition">Restablecer filtros</button>
+      </div>
+
+    </section>
+
+    <!-- TAB 3: LIVE TERMINAL -->
+    <section id="tab-terminal" class="tab-content hidden space-y-4">
+      
+      <!-- Terminal Control Header -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-[#151921] border border-[#262D3D] rounded-xl p-4">
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center font-mono">
+            &gt;_
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-white">Terminal Web & Ejecutor en Streaming</h2>
+            <p class="text-xs text-gray-400">Ejecuta comandos de hackingtool, scripts y herramientas con salida en vivo</p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button onclick="clearTerminal()" class="px-3 py-1.5 bg-[#262D3D] hover:bg-[#343D52] text-xs text-gray-300 rounded-lg flex items-center space-x-1.5 transition">
+            <i class="fa-solid fa-broom text-xs"></i>
+            <span>Limpiar</span>
+          </button>
+          <button id="term-kill-btn" onclick="killProcess()" class="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs rounded-lg flex items-center space-x-1.5 transition">
+            <i class="fa-solid fa-stop text-xs"></i>
+            <span>Interrumpir (Ctrl+C)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Command Presets Bar -->
+      <div class="flex flex-wrap items-center gap-2 text-xs bg-[#121620] p-2.5 rounded-lg border border-[#262D3D]">
+        <span class="text-gray-400 font-mono">Atajos:</span>
+        <button onclick="runPredefinedCommand('nmap --version')" class="px-2.5 py-1 rounded bg-[#262D3D] hover:bg-purple-600/30 hover:text-purple-300 text-gray-300 font-mono transition">nmap --version</button>
+        <button onclick="runPredefinedCommand('which python3')" class="px-2.5 py-1 rounded bg-[#262D3D] hover:bg-purple-600/30 hover:text-purple-300 text-gray-300 font-mono transition">which python3</button>
+        <button onclick="runPredefinedCommand('uname -a')" class="px-2.5 py-1 rounded bg-[#262D3D] hover:bg-purple-600/30 hover:text-purple-300 text-gray-300 font-mono transition">uname -a</button>
+        <button onclick="runPredefinedCommand('ls -la')" class="px-2.5 py-1 rounded bg-[#262D3D] hover:bg-purple-600/30 hover:text-purple-300 text-gray-300 font-mono transition">ls -la</button>
+        <button onclick="runPredefinedCommand('whoami')" class="px-2.5 py-1 rounded bg-[#262D3D] hover:bg-purple-600/30 hover:text-purple-300 text-gray-300 font-mono transition">whoami</button>
+      </div>
+
+      <!-- Main Terminal Window Screen -->
+      <div class="terminal-window rounded-xl overflow-hidden border border-[#1E2532] shadow-2xl flex flex-col h-[520px]">
+        
+        <!-- Terminal Titlebar -->
+        <div class="bg-[#121620] px-4 py-2 border-b border-[#1E2532] flex items-center justify-between text-xs">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-green-500/80 inline-block"></span>
+            <span class="ml-2 font-mono text-gray-400" id="term-title">bash — hackingtool workspace</span>
+          </div>
+          <span id="term-active-indicator" class="text-[10px] text-green-400 font-mono">LISTO</span>
+        </div>
+
+        <!-- Terminal Output Area -->
+        <div id="terminal-output" class="flex-1 p-4 overflow-y-auto font-mono text-xs text-gray-300 space-y-1 select-text">
+          <div class="text-purple-400">HackingTool v3.0 Interactive Web Terminal initialized.</div>
+          <div class="text-gray-400">Escribe cualquier comando o usa los botones 'Ejecutar' del catálogo para probar herramientas.</div>
+          <div class="text-gray-400">──────────────────────────────────────────────────────────────────────────</div>
+        </div>
+
+        <!-- Terminal Input Bar -->
+        <form onsubmit="handleTerminalSubmit(event)" class="bg-[#10141D] p-3 border-t border-[#1E2532] flex items-center space-x-2">
+          <span class="text-green-400 font-mono font-bold text-sm pl-1">$</span>
+          <input 
+            type="text" 
+            id="terminal-input" 
+            placeholder="Introduce comando bash (ej: nmap -sn 192.168.1.0/24)..." 
+            class="flex-1 bg-transparent text-white font-mono text-xs focus:outline-none placeholder-gray-600"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button type="submit" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-mono font-medium transition">
+            Ejecutar
+          </button>
+        </form>
+
+      </div>
+
+    </section>
+
+    <!-- TAB 4: AI ASSISTANT -->
+    <section id="tab-ai" class="tab-content hidden space-y-6">
+      
+      <!-- AI Query Banner -->
+      <div class="bg-gradient-to-r from-purple-900/40 via-[#151921] to-[#121620] border border-purple-500/30 rounded-2xl p-6 sm:p-8">
+        <div class="max-w-2xl">
+          <div class="flex items-center space-x-2 text-purple-400 text-xs font-semibold uppercase tracking-wider mb-2">
+            <i class="fa-solid fa-brain"></i>
+            <span>Motor de Recomendación Inteligente</span>
+          </div>
+          <h2 class="text-2xl font-bold text-white">¿Cuál es tu objetivo de seguridad?</h2>
+          <p class="text-xs text-gray-300 mt-2">
+            Describe lo que quieres lograr en lenguaje natural (ej. "escanear puertos abiertos", "buscar subdominios ocultos", "generar un payload inverso" o "auditar wifi"). El sistema deducirá la taxonomía y te entregará las mejores herramientas con comandos exactos.
+          </p>
+
+          <form onsubmit="handleAiRecommend(event)" class="mt-5 flex gap-2">
+            <input 
+              type="text" 
+              id="ai-intent-input" 
+              placeholder="Ej: Quiero enumerar subdominios y servidores web de example.com..." 
+              class="flex-1 px-4 py-3 rounded-xl bg-[#0B0E14] border border-[#262D3D] focus:border-purple-500 focus:outline-none text-white text-sm placeholder-gray-500"
+              required
+            >
+            <button type="submit" id="ai-submit-btn" class="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm flex items-center space-x-2 shadow-lg shadow-purple-600/30 transition">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Consultar</span>
+            </button>
+          </form>
+
+          <!-- Prompt suggestions -->
+          <div class="mt-3 flex flex-wrap gap-2 text-xs">
+            <span class="text-gray-400">Prueba con:</span>
+            <button onclick="setAiPrompt('escanear puertos y servicios de un servidor')" class="text-purple-400 hover:underline">Escanear puertos</button>
+            <span class="text-gray-400">•</span>
+            <button onclick="setAiPrompt('buscar subdominios y dns de un objetivo')" class="text-purple-400 hover:underline">Buscar subdominios</button>
+            <span class="text-gray-400">•</span>
+            <button onclick="setAiPrompt('capturar y crackear handshake de red wifi wpa2')" class="text-purple-400 hover:underline">Crackear WiFi</button>
+            <span class="text-gray-400">•</span>
+            <button onclick="setAiPrompt('detectar inyecciones SQL en un formulario web')" class="text-purple-400 hover:underline">SQL Injection</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Results Display -->
+      <div id="ai-results-container" class="space-y-4 hidden">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-bullseye text-purple-400"></i>
+            <span>Herramientas Recomendadas para tu Objetivo</span>
+          </h3>
+          <div id="ai-detected-tags" class="flex flex-wrap gap-1.5">
+            <!-- Injected tags -->
+          </div>
+        </div>
+
+        <div id="ai-recommendations-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 5: ENGAGEMENTS & AUDITS -->
+    <section id="tab-engagements" class="tab-content hidden space-y-6">
+      
+      <!-- Engagement Header & Actions -->
+      <div class="flex flex-wrap items-center justify-between gap-4 bg-[#151921] border border-[#262D3D] rounded-xl p-5">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-folder-tree text-purple-400"></i>
+            <span>Gestor de Auditorías & Engagements</span>
+          </h2>
+          <p class="text-xs text-gray-400 mt-1">Organiza tus proyectos de pruebas autorizadas, scopes, hallazgos y reportes generados</p>
+        </div>
+
+        <button onclick="openNewEngagementModal()" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-medium flex items-center space-x-2 shadow-lg shadow-purple-600/30 transition">
+          <i class="fa-solid fa-plus"></i>
+          <span>Nueva Auditoría</span>
+        </button>
+      </div>
+
+      <!-- Engagements Grid & Workspace View -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Engagements List Sidebar -->
+        <div class="bg-[#151921] border border-[#262D3D] rounded-xl p-4 space-y-3">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Auditorías Guardadas</div>
+          <div id="engagements-list" class="space-y-2 max-h-[500px] overflow-y-auto">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Selected Engagement Details Area -->
+        <div class="lg:col-span-2 bg-[#151921] border border-[#262D3D] rounded-xl p-5 space-y-5">
+          <div id="engagement-details-empty" class="text-center py-16 text-gray-400">
+            <i class="fa-solid fa-folder-open text-4xl mb-3"></i>
+            <p class="text-sm">Selecciona una auditoría de la lista o crea una nueva para ver detalles y hallazgos.</p>
+          </div>
+
+          <div id="engagement-details-view" class="hidden space-y-5">
+            <!-- Header of engagement -->
+            <div class="flex items-center justify-between border-b border-[#262D3D] pb-4">
+              <div>
+                <h3 id="eng-view-name" class="text-xl font-extrabold text-white">Nombre</h3>
+                <span id="eng-view-created" class="text-xs text-gray-400 font-mono">Fecha</span>
+              </div>
+              <button onclick="openAddFindingModal()" class="px-3 py-1.5 bg-[#262D3D] hover:bg-[#343D52] text-xs text-purple-400 rounded-lg flex items-center space-x-1.5 transition">
+                <i class="fa-solid fa-plus"></i>
+                <span>Añadir Hallazgo</span>
+              </button>
+            </div>
+
+            <!-- Targets & Scopes -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div class="bg-[#0B0E14] p-3 rounded-lg border border-[#262D3D]">
+                <span class="text-gray-400 block mb-1 font-semibold">Targets (Objetivos):</span>
+                <div id="eng-view-targets" class="font-mono text-purple-300">--</div>
+              </div>
+              <div class="bg-[#0B0E14] p-3 rounded-lg border border-[#262D3D]">
+                <span class="text-gray-400 block mb-1 font-semibold">Scope Permitido:</span>
+                <div id="eng-view-scope" class="font-mono text-green-400">--</div>
+              </div>
+            </div>
+
+            <!-- Findings Section -->
+            <div>
+              <h4 class="text-sm font-bold text-white mb-2 flex items-center space-x-2">
+                <i class="fa-solid fa-shield-virus text-yellow-400"></i>
+                <span>Hallazgos Registrados (<span id="eng-findings-count">0</span>)</span>
+              </h4>
+              <div id="eng-findings-list" class="space-y-2 max-h-48 overflow-y-auto">
+                <!-- Injected via JavaScript -->
+              </div>
+            </div>
+
+            <!-- Report Preview Section -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-sm font-bold text-white flex items-center space-x-2">
+                  <i class="fa-solid fa-file-contract text-blue-400"></i>
+                  <span>Reporte Generado</span>
+                </h4>
+                <button onclick="downloadReport()" class="text-xs text-purple-400 hover:underline">Descargar Markdown</button>
+              </div>
+              <div id="eng-report-preview" class="p-4 bg-[#0B0E14] border border-[#262D3D] rounded-xl text-xs max-h-60 overflow-y-auto prose prose-invert">
+                <!-- Rendered Markdown -->
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- TAB 6: CONFIG & SETTINGS -->
+    <section id="tab-config" class="tab-content hidden max-w-3xl space-y-6">
+      
+      <div class="bg-[#151921] border border-[#262D3D] rounded-xl p-6 space-y-6">
+        <div>
+          <h2 class="text-lg font-bold text-white">Configuración del Sistema & Capa IA</h2>
+          <p class="text-xs text-gray-400">Ajusta los parámetros de integración, proveedores de modelos y directorios</p>
+        </div>
+
+        <form onsubmit="saveConfiguration(event)" class="space-y-4">
+          
+          <!-- AI Provider Selection -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">Proveedor de Inteligencia Artificial</label>
+            <select id="cfg-ai-provider" class="w-full px-3 py-2 rounded-lg bg-[#0B0E14] border border-[#262D3D] text-white text-xs focus:border-purple-500 focus:outline-none">
+              <option value="auto">Automático (Intenta OpenAI/Claude, luego Ollama local)</option>
+              <option value="openai-compat">OpenAI / Groq / Anthropic compatible (Requiere API Key)</option>
+              <option value="ollama">Ollama Local (http://localhost:11434)</option>
+            </select>
+          </div>
+
+          <!-- Base URL -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">URL Base de API de IA</label>
+            <input type="text" id="cfg-ai-base-url" placeholder="https://api.openai.com/v1" class="w-full px-3 py-2 rounded-lg bg-[#0B0E14] border border-[#262D3D] text-white text-xs font-mono focus:border-purple-500 focus:outline-none">
+          </div>
+
+          <!-- Model Name -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">Nombre del Modelo</label>
+            <input type="text" id="cfg-ai-model" placeholder="gpt-4o-mini / llama3 / mistral" class="w-full px-3 py-2 rounded-lg bg-[#0B0E14] border border-[#262D3D] text-white text-xs font-mono focus:border-purple-500 focus:outline-none">
+          </div>
+
+          <!-- API Key Input -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">Clave de API de IA (HACKINGTOOL_AI_KEY)</label>
+            <div class="relative">
+              <input type="password" id="cfg-ai-key" placeholder="Dejar en blanco para mantener la clave actual" class="w-full px-3 py-2 rounded-lg bg-[#0B0E14] border border-[#262D3D] text-white text-xs font-mono focus:border-purple-500 focus:outline-none">
+              <span id="cfg-key-status" class="absolute right-3 top-2.5 text-[11px] text-gray-500"></span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-1">Se almacena con permisos seguros (chmod 600) en ~/.hackingtool/.env</p>
+          </div>
+
+          <!-- Tools Directory -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">Directorio de Herramientas Externas</label>
+            <input type="text" id="cfg-tools-dir" class="w-full px-3 py-2 rounded-lg bg-[#0B0E14] border border-[#262D3D] text-white text-xs font-mono focus:border-purple-500 focus:outline-none" readonly>
+          </div>
+
+          <div class="pt-2 flex items-center justify-between">
+            <button type="button" onclick="testAiConnection()" id="btn-test-ai" class="px-4 py-2 bg-[#262D3D] hover:bg-[#343D52] text-xs text-gray-200 rounded-lg transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-network-wired text-xs"></i>
+              <span>Probar Conexión de IA</span>
+            </button>
+
+            <button type="submit" class="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-medium transition shadow-lg shadow-purple-600/30">
+              Guardar Configuración
+            </button>
+          </div>
+
+        </form>
+
+        <!-- Test result notice -->
+        <div id="ai-test-result" class="hidden p-3 rounded-lg text-xs font-mono"></div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- MODAL: TOOL DETAIL -->
+  <div id="tool-detail-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-[#151921] border border-[#262D3D] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl">
+      
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-[#262D3D] flex items-start justify-between">
+        <div>
+          <div class="flex items-center space-x-2">
+            <h3 id="modal-tool-title" class="text-xl font-bold text-white">Nombre de Herramienta</h3>
+            <span id="modal-tool-status" class="text-[10px] px-2 py-0.5 rounded-full font-mono"></span>
+          </div>
+          <span id="modal-tool-category" class="text-xs text-purple-400 mt-1 block">Categoría</span>
+        </div>
+        <button onclick="closeToolModal()" class="text-gray-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-5 text-xs">
+        
+        <div>
+          <h4 class="font-semibold text-gray-400 uppercase tracking-wider text-[11px] mb-1">Descripción</h4>
+          <p id="modal-tool-desc" class="text-gray-300 leading-relaxed text-sm"></p>
+        </div>
+
+        <div id="modal-tool-url-box">
+          <h4 class="font-semibold text-gray-400 uppercase tracking-wider text-[11px] mb-1">Repositorio / Proyecto</h4>
+          <a id="modal-tool-url" href="#" target="_blank" rel="noopener noreferrer" class="text-purple-400 hover:underline break-all font-mono"></a>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-gray-400 uppercase tracking-wider text-[11px] mb-2">Etiquetas</h4>
+          <div id="modal-tool-tags" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <!-- Cheatsheet USAGE Top Commands -->
+        <div id="modal-tool-usage-box">
+          <h4 class="font-semibold text-yellow-400 uppercase tracking-wider text-[11px] mb-2 flex items-center space-x-1.5">
+            <i class="fa-solid fa-lightbulb"></i>
+            <span>Comandos Frecuentes (Cheatsheet)</span>
+          </h4>
+          <div id="modal-tool-usage-list" class="space-y-2">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Install Commands -->
+        <div id="modal-tool-install-box">
+          <h4 class="font-semibold text-gray-400 uppercase tracking-wider text-[11px] mb-1">Comandos de Instalación</h4>
+          <div id="modal-tool-install-cmds" class="space-y-1 font-mono text-[11px] bg-[#0B0E14] p-3 rounded-lg border border-[#262D3D]"></div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer Actions -->
+      <div class="p-4 bg-[#121620] border-t border-[#262D3D] flex items-center justify-between">
+        <button onclick="closeToolModal()" class="px-4 py-2 bg-[#262D3D] text-gray-300 rounded-lg text-xs hover:bg-[#343D52] transition">Cerrar</button>
+        <div class="flex items-center space-x-2">
+          <button id="modal-btn-install" onclick="executeCurrentToolInstall()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-download"></i>
+            <span>Instalar</span>
+          </button>
+          <button id="modal-btn-run" onclick="executeCurrentToolRun()" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-play"></i>
+            <span>Ejecutar</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: NEW ENGAGEMENT -->
+  <div id="new-engagement-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-[#151921] border border-[#262D3D] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-[#262D3D] pb-3">
+        <h3 class="text-base font-bold text-white">Crear Nueva Auditoría / Engagement</h3>
+        <button onclick="closeNewEngagementModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form onsubmit="handleCreateEngagement(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-gray-300 mb-1">Nombre del Proyecto</label>
+          <input type="text" id="eng-new-name" placeholder="ej: audit-web-corp" required class="w-full px-3 py-2 bg-[#0B0E14] border border-[#262D3D] rounded-lg text-white focus:border-purple-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block font-semibold text-gray-300 mb-1">Targets / Objetivos (separados por coma o espacio)</label>
+          <input type="text" id="eng-new-targets" placeholder="ej: 192.168.1.100, target.local" class="w-full px-3 py-2 bg-[#0B0E14] border border-[#262D3D] rounded-lg text-white focus:border-purple-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block font-semibold text-gray-300 mb-1">Scope In (Dominios/IPs autorizadas)</label>
+          <input type="text" id="eng-new-scope-in" placeholder="ej: *.target.local, 192.168.1.*" class="w-full px-3 py-2 bg-[#0B0E14] border border-[#262D3D] rounded-lg text-white focus:border-purple-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block font-semibold text-gray-300 mb-1">Scope Out (Exclusiones estrictas)</label>
+          <input type="text" id="eng-new-scope-out" placeholder="ej: prod.target.local" class="w-full px-3 py-2 bg-[#0B0E14] border border-[#262D3D] rounded-lg text-white focus:border-purple-500 focus:outline-none">
+        </div>
+
+        <div class="pt-3 flex justify-end space-x-2">
+          <button type="button" onclick="closeNewEngagementModal()" class="px-4 py-2 bg-[#262D3D] text-gray-300 rounded-lg">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium">Crear Auditoría</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="mt-auto py-4 border-t border-[#1C2230] text-center text-xs text-gray-400">
+    HackingTool Web Suite • Uso estrictamente autorizado en sistemas propios o con permiso expreso • MIT License
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

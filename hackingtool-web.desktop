@@ -1,0 +1,19 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=HackingTool Web Suite
+GenericName=Pentesting & Security Toolkit
+Comment=AI-guided, all-in-one toolkit for authorized security testing
+Exec=/home/saghet/Documents/OpenWifi/hackingtool/start_web.sh
+Icon=/home/saghet/Documents/OpenWifi/hackingtool/images/logo.svg
+Path=/home/saghet/Documents/OpenWifi/hackingtool
+Terminal=false
+StartupNotify=true
+Categories=Development;Security;System;Network;
+Keywords=security;pentesting;hacking;recon;osint;tools;
+Actions=OpenCLI;
+
+[Desktop Action OpenCLI]
+Name=Abrir Consola CLI Interactiva
+Exec=/home/saghet/Documents/OpenWifi/hackingtool/start_cli.sh
+Terminal=true
